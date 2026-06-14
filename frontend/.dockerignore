@@ -1,0 +1,66 @@
+# ============ 依赖与构建产物 ============
+node_modules/
+dist/
+dist-ssr/
+build/
+.cache/
+.parcel-cache/
+.vite/
+
+# ============ 包管理 ============
+# 注意：package-lock.json 绝不能加入 .dockerignore，
+#       前端 Dockerfile 使用 npm ci 精准还原依赖，必须要有 lock 文件
+# package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+pnpm-lock.yaml
+# .npmrc 和 .yarnrc 如果有自定义源，也保留，不排除
+# .npmrc
+# .yarnrc
+.pnpmfile.cjs
+
+# ============ 日志 & 临时 ============
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.temp
+
+# ============ 本地环境 ============
+.env
+.env.local
+.env.*.local
+.development
+.production
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============ 测试 ============
+coverage/
+.nyc_output/
+tests/e2e/videos/
+tests/e2e/screenshots/
+cypress/videos/
+cypress/screenshots/
+
+# ============ 静态资源（除了构建好的 dist） ============
+*.bak
+*.old
+*.orig
+
+# ============ 文档（可选，不参与构建） ============
+*.md
+!README.md
+
+# ============ Git / 版本 ============
+.git/
+.gitignore
+.gitattributes

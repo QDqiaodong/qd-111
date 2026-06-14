@@ -1,0 +1,135 @@
+services:
+  mysql:
+    image: ${DOCKER_REGISTRY}/mysql:8.0
+    container_name: ${APP_NAME}-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${MYSQL_PORT}:${MYSQL_CONTAINER_PORT}"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./backend/src/main/resources/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - app-net
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb_buffer_pool_size=64M
+      - --innodb_log_buffer_size=8M
+      - --max_connections=40
+      - --table_open_cache=128
+      - --performance_schema=OFF
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: ${DOCKER_REGISTRY}/redis:7.2-alpine
+    container_name: ${APP_NAME}-redis
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${REDIS_PORT}:${REDIS_CONTAINER_PORT}"
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-net
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - "${REDIS_PASSWORD}"
+      - --maxmemory
+      - "256mb"
+      - --maxmemory-policy
+      - "allkeys-lru"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-h", "127.0.0.1", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        MAVEN_MIRROR: tencent
+    container_name: ${APP_NAME}-backend
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: ${BACKEND_CONTAINER_PORT}
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_CONTAINER_PORT}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_CONTAINER_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT}:${BACKEND_CONTAINER_PORT}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://127.0.0.1:${BACKEND_CONTAINER_PORT}/dashboard/stats || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        VITE_API_BASE: ""
+    container_name: ${APP_NAME}-frontend
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      BACKEND_HOST: backend
+      BACKEND_PORT: ${BACKEND_CONTAINER_PORT}
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT}:${FRONTEND_CONTAINER_PORT}"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${FRONTEND_CONTAINER_PORT}/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  mysql-data:
+    name: ${APP_NAME}-mysql-data
+  redis-data:
+    name: ${APP_NAME}-redis-data
+
+networks:
+  app-net:
+    name: ${APP_NAME}-net
+    driver: bridge

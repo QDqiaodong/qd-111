@@ -1,0 +1,60 @@
+# ============ Maven 构建产物 ============
+target/
+build/
+out/
+
+# ============ IDE ============
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*.launch
+
+# ============ Maven / 构建配置（非必要不拷贝） ============
+.mvn/
+mvnw
+mvnw.cmd
+dependency-reduced-pom.xml
+
+# ============ 日志 & 临时 ============
+logs/
+*.log
+hs_err_pid*
+*.tmp
+*.temp
+
+# ============ 本地环境 ============
+.env
+.env.local
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ============ 测试 / 覆盖率 ============
+coverage/
+.coverage
+cobertura.ser
+jacoco.exec
+
+# ============ 文档（不参与构建，缩小 context） ============
+*.md
+!README.md
+docs/
+HELP.md
+
+# ============ Git / 版本 ============
+.git/
+.gitignore
+.gitattributes
+
+# ============ Spring 本地临时 ============
+spring-shell.log
+application-local.yml
+application-local.properties
