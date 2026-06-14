@@ -344,10 +344,12 @@ const handleDelete = (row) => {
     try {
       await replacementApi.remove([row.id])
       ElMessage.success('删除成功')
-    } catch {
-      ElMessage.success('删除成功')
+      loadList()
+    } catch (e) {
+      if (e?.message !== 'cancel') {
+        ElMessage.error(e?.message || '删除失败，请稍后重试')
+      }
     }
-    loadList()
   }).catch(() => {})
 }
 
@@ -360,17 +362,20 @@ const handleBatchDelete = (rows) => {
     try {
       await replacementApi.remove(rows.map(r => r.id))
       ElMessage.success('批量删除成功')
-    } catch {
-      ElMessage.success('批量删除成功')
+      clearSelection()
+      loadList()
+    } catch (e) {
+      if (e?.message !== 'cancel') {
+        ElMessage.error(e?.message || '批量删除失败，请稍后重试')
+      }
     }
-    clearSelection()
-    loadList()
   }).catch(() => {})
 }
 
 const handleSubmit = async () => {
   await formRef.value.validate()
   submitting.value = true
+  const originalForm = { ...form }
   try {
     if (dialogMode.value === 'add') {
       await replacementApi.add(form)
@@ -382,12 +387,13 @@ const handleSubmit = async () => {
     loadList()
     loadHistory()
   } catch (err) {
-    if (err?.message !== '校验不通过') {
-      ElMessage.success('保存成功')
-      dialogVisible.value = false
-      loadList()
-      loadHistory()
+    if (err?.message === '校验不通过') {
+      return
     }
+    if (dialogMode.value === 'edit') {
+      Object.assign(form, originalForm)
+    }
+    ElMessage.error(err?.message || '保存失败，请稍后重试')
   } finally {
     submitting.value = false
   }

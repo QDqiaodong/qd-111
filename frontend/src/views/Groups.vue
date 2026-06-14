@@ -314,18 +314,29 @@ const handleDeleteGroup = (group) => {
     confirmButtonText: '删除',
     cancelButtonText: '取消'
   }).then(async () => {
+    const originalGroups = [...groupList.value]
+    const originalAccessories = allAccessories.value.map(a => ({ id: a.id, groupId: a.groupId }))
+    const prevCurrentGroupId = currentGroupId.value
     try {
       await groupApi.remove(group.id)
+      groupList.value = groupList.value.filter(g => g.id !== group.id)
+      allAccessories.value.forEach(a => {
+        if (a.groupId === group.id) a.groupId = null
+      })
+      if (currentGroupId.value === group.id) {
+        currentGroupId.value = groupList.value[0]?.id || null
+      }
       ElMessage.success('删除成功')
-    } catch {
-      ElMessage.success('删除成功')
-    }
-    groupList.value = groupList.value.filter(g => g.id !== group.id)
-    allAccessories.value.forEach(a => {
-      if (a.groupId === group.id) a.groupId = null
-    })
-    if (currentGroupId.value === group.id) {
-      currentGroupId.value = groupList.value[0]?.id || null
+    } catch (e) {
+      groupList.value = originalGroups
+      originalAccessories.forEach(oa => {
+        const acc = allAccessories.value.find(a => a.id === oa.id)
+        if (acc) acc.groupId = oa.groupId
+      })
+      currentGroupId.value = prevCurrentGroupId
+      if (e?.message !== 'cancel') {
+        ElMessage.error(e?.message || '删除失败，请稍后重试')
+      }
     }
   }).catch(() => {})
 }
@@ -333,6 +344,7 @@ const handleDeleteGroup = (group) => {
 const handleGroupSubmit = async () => {
   await groupFormRef.value.validate()
   submitting.value = true
+  const originalGroups = [...groupList.value]
   try {
     if (groupDialogMode.value === 'add') {
       const res = await groupApi.add(groupForm)
@@ -347,16 +359,11 @@ const handleGroupSubmit = async () => {
     }
     groupDialogVisible.value = false
   } catch (err) {
-    if (err?.message !== '校验不通过') {
-      if (groupDialogMode.value === 'add') {
-        groupList.value.push({ ...groupForm, id: Date.now() })
-      } else {
-        const idx = groupList.value.findIndex(g => g.id === groupForm.id)
-        if (idx > -1) groupList.value.splice(idx, 1, { ...groupForm })
-      }
-      ElMessage.success('保存成功')
-      groupDialogVisible.value = false
+    if (err?.message === '校验不通过') {
+      return
     }
+    groupList.value = originalGroups
+    ElMessage.error(err?.message || '保存失败，请稍后重试')
   } finally {
     submitting.value = false
   }
@@ -372,18 +379,25 @@ const confirmMove = async () => {
     ElMessage.warning('请选择目标分组')
     return
   }
-  try {
-    ElMessage.success(`已移动 ${selectedRows.value.length} 个配件`)
-  } catch {
-    ElMessage.success(`已移动 ${selectedRows.value.length} 个配件`)
-  }
+  const originalGroupIds = selectedRows.value.map(r => ({ id: r.id, groupId: r.groupId }))
   const targetGroup = groupList.value.find(g => g.id === targetGroupId.value)
-  selectedRows.value.forEach(row => {
-    const acc = allAccessories.value.find(a => a.id === row.id)
-    if (acc) acc.groupId = targetGroupId.value
-  })
-  tableRef.value.clearSelection()
-  moveDialogVisible.value = false
+  try {
+    selectedRows.value.forEach(row => {
+      const acc = allAccessories.value.find(a => a.id === row.id)
+      if (acc) acc.groupId = targetGroupId.value
+    })
+    tableRef.value.clearSelection()
+    moveDialogVisible.value = false
+    ElMessage.success(`已移动 ${selectedRows.value.length} 个配件到「${targetGroup?.name || '目标分组'}」`)
+  } catch (e) {
+    originalGroupIds.forEach(og => {
+      const acc = allAccessories.value.find(a => a.id === og.id)
+      if (acc) acc.groupId = og.groupId
+    })
+    if (e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '移动失败，请稍后重试')
+    }
+  }
 }
 
 const getWornLabel = (code) => {

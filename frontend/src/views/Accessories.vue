@@ -674,10 +674,12 @@ const handleDelete = (row) => {
     try {
       await accessoryApi.remove([row.id])
       ElMessage.success('删除成功')
-    } catch {
-      ElMessage.success('删除成功')
+      loadList()
+    } catch (e) {
+      if (e?.message !== 'cancel') {
+        ElMessage.error(e?.message || '删除失败，请稍后重试')
+      }
     }
-    loadList()
   }).catch(() => {})
 }
 
@@ -690,11 +692,13 @@ const handleBatchDelete = (rows) => {
     try {
       await accessoryApi.remove(rows.map(r => r.id))
       ElMessage.success('批量删除成功')
-    } catch {
-      ElMessage.success('批量删除成功')
+      clearSelection()
+      loadList()
+    } catch (e) {
+      if (e?.message !== 'cancel') {
+        ElMessage.error(e?.message || '批量删除失败，请稍后重试')
+      }
     }
-    clearSelection()
-    loadList()
   }).catch(() => {})
 }
 
@@ -702,16 +706,19 @@ const handleBatchStatus = async (code) => {
   try {
     await accessoryApi.batchUpdateStatus(selectedRows.value.map(r => r.id), code)
     ElMessage.success('批量更新成功')
-  } catch {
-    ElMessage.success('批量更新成功')
+    clearSelection()
+    loadList()
+  } catch (e) {
+    if (e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '批量更新失败，请稍后重试')
+    }
   }
-  clearSelection()
-  loadList()
 }
 
 const handleSubmit = async () => {
   await formRef.value.validate()
   submitting.value = true
+  const originalForm = { ...form }
   try {
     if (dialogMode.value === 'add') {
       await accessoryApi.add(form)
@@ -722,11 +729,13 @@ const handleSubmit = async () => {
     dialogVisible.value = false
     loadList()
   } catch (err) {
-    if (err?.message !== '校验不通过') {
-      ElMessage.success('保存成功')
-      dialogVisible.value = false
-      loadList()
+    if (err?.message === '校验不通过') {
+      return
     }
+    if (dialogMode.value === 'edit') {
+      Object.assign(form, originalForm)
+    }
+    ElMessage.error(err?.message || '保存失败，请稍后重试')
   } finally {
     submitting.value = false
   }

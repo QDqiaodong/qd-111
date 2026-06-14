@@ -148,6 +148,7 @@ const selectedRows = ref([])
 const groupList = ref([])
 const accessoryTypes = ref([])
 const activeStatus = ref('')
+const allAccessories = ref([])
 
 const wornStatuses = ref([
   { code: 'good', label: '完好', color: '#67c23a' },
@@ -173,7 +174,7 @@ const tableData = ref([])
 
 const statusOverview = computed(() => {
   const counts = { good: 0, slight: 0, severe: 0, broken: 0 }
-  tableData.value.forEach(row => {
+  allAccessories.value.forEach(row => {
     if (counts[row.wornStatus] !== undefined) counts[row.wornStatus]++
   })
   return wornStatuses.value.map(w => ({
@@ -235,6 +236,36 @@ const loadList = async () => {
   }
 }
 
+const loadAllList = async () => {
+  try {
+    const res = await accessoryApi.list({
+      keyword: filters.keyword,
+      groupId: filters.groupId,
+      typeCode: filters.typeCode
+    })
+    if (res && res.data) {
+      allAccessories.value = res.data.records || res.data.list || res.data || []
+    } else {
+      loadMockAllList()
+    }
+  } catch {
+    loadMockAllList()
+  }
+}
+
+const loadMockAllList = () => {
+  allAccessories.value = [
+    { id: 1, wornStatus: 'slight' },
+    { id: 2, wornStatus: 'good' },
+    { id: 3, wornStatus: 'good' },
+    { id: 4, wornStatus: 'slight' },
+    { id: 5, wornStatus: 'good' },
+    { id: 6, wornStatus: 'severe' },
+    { id: 7, wornStatus: 'broken' },
+    { id: 8, wornStatus: 'good' }
+  ]
+}
+
 const loadMockList = () => {
   tableData.value = [
     { id: 1, name: '木吉他琴弦', specification: '012-053 磷铜覆膜', typeCode: 'string', typeName: '琴弦', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 1, groupName: '弹奏配件', wornStatus: 'slight', purchaseDate: '2026-04-01', imageUrl: '', usageDays: 74 },
@@ -251,6 +282,7 @@ const loadMockList = () => {
 
 const handleSearch = () => {
   pagination.pageNum = 1
+  loadAllList()
   loadList()
 }
 
@@ -266,7 +298,8 @@ const clearFilters = () => {
 const toggleStatusFilter = (code) => {
   activeStatus.value = activeStatus.value === code ? '' : code
   filters.wornStatus = activeStatus.value
-  handleSearch()
+  pagination.pageNum = 1
+  loadList()
 }
 
 const handleSelectionChange = (rows) => {
@@ -274,11 +307,17 @@ const handleSelectionChange = (rows) => {
 }
 
 const handleQuickMark = async (row, status) => {
+  const originalStatus = row.wornStatus
   try {
     await accessoryApi.updateStatus(row.id, status)
     ElMessage.success(`已更新为「${getWornLabel(status)}」`)
-  } catch {
-    ElMessage.success(`已更新为「${getWornLabel(status)}」`)
+    const allRow = allAccessories.value.find(a => a.id === row.id)
+    if (allRow) allRow.wornStatus = status
+  } catch (e) {
+    row.wornStatus = originalStatus
+    if (e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '标注失败，请稍后重试')
+    }
   }
 }
 
@@ -292,14 +331,22 @@ const handleBatchMark = async (code) => {
     '批量标注',
     { type: 'warning', confirmButtonText: '确定标注', cancelButtonText: '取消' }
   ).then(async () => {
+    const originalStatuses = selectedRows.value.map(r => ({ id: r.id, wornStatus: r.wornStatus }))
     try {
       await accessoryApi.batchUpdateStatus(selectedRows.value.map(r => r.id), code)
       ElMessage.success('批量标注成功')
-    } catch {
-      ElMessage.success('批量标注成功')
+      tableRef.value.clearSelection()
+      loadAllList()
+      loadList()
+    } catch (e) {
+      originalStatuses.forEach(os => {
+        const row = tableData.value.find(r => r.id === os.id)
+        if (row) row.wornStatus = os.wornStatus
+      })
+      if (e?.message !== 'cancel') {
+        ElMessage.error(e?.message || '批量标注失败，请稍后重试')
+      }
     }
-    tableRef.value.clearSelection()
-    loadList()
   }).catch(() => {})
 }
 
@@ -320,6 +367,7 @@ const getWornTagType = (code) => {
 
 onMounted(() => {
   loadDict()
+  loadAllList()
   loadList()
 })
 </script>
