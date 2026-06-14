@@ -7,9 +7,12 @@ import com.instrument.common.PageResult;
 import com.instrument.dto.AccessoryDTO;
 import com.instrument.dto.AccessoryQueryDTO;
 import com.instrument.entity.Accessory;
+import com.instrument.entity.ReplacementRecord;
 import com.instrument.mapper.AccessoryMapper;
+import com.instrument.mapper.ReplacementRecordMapper;
 import com.instrument.service.AccessoryService;
 import com.instrument.service.DictService;
+import com.instrument.vo.AccessoryLifecycleVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -19,7 +22,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -27,6 +34,7 @@ import java.util.List;
 public class AccessoryServiceImpl implements AccessoryService {
 
     private final AccessoryMapper accessoryMapper;
+    private final ReplacementRecordMapper replacementRecordMapper;
     private final DictService dictService;
 
     @Override
@@ -149,5 +157,86 @@ public class AccessoryServiceImpl implements AccessoryService {
             wrapper.eq(Accessory::getInstrument, query.getInstrument());
         }
         return wrapper;
+    }
+
+    @Override
+    public AccessoryLifecycleVO getLifecycle(Long id) {
+        Accessory accessory = accessoryMapper.selectById(id);
+        if (accessory == null) return null;
+        return buildLifecycleVO(accessory);
+    }
+
+    @Override
+    public List<AccessoryLifecycleVO> listLifecycle(AccessoryQueryDTO query) {
+        LambdaQueryWrapper<Accessory> wrapper = buildWrapper(query);
+        wrapper.orderByDesc(Accessory::getCreateTime);
+        List<Accessory> list = accessoryMapper.selectList(wrapper);
+        return list.stream().map(this::buildLifecycleVO).collect(Collectors.toList());
+    }
+
+    private AccessoryLifecycleVO buildLifecycleVO(Accessory accessory) {
+        AccessoryLifecycleVO vo = new AccessoryLifecycleVO();
+        vo.setAccessoryId(accessory.getId());
+        vo.setName(accessory.getName());
+        vo.setPurchaseDate(accessory.getPurchaseDate());
+        vo.setStandardCycle(accessory.getStandardCycle());
+        vo.setWornStatus(accessory.getWornStatus());
+
+        LocalDate referenceDate = getLastReplaceDate(accessory.getId());
+        vo.setLastReplaceDate(referenceDate);
+
+        if (referenceDate == null && accessory.getPurchaseDate() != null) {
+            referenceDate = accessory.getPurchaseDate();
+        }
+
+        if (referenceDate != null) {
+            int usedDays = (int) ChronoUnit.DAYS.between(referenceDate, LocalDate.now());
+            vo.setUsedDays(Math.max(usedDays, 0));
+        } else {
+            vo.setUsedDays(0);
+        }
+
+        if (accessory.getStandardCycle() != null && accessory.getStandardCycle() > 0) {
+            int pct = Math.round((float) vo.getUsedDays() / accessory.getStandardCycle() * 100);
+            vo.setCyclePercent(Math.min(pct, 100));
+            int daysLeft = accessory.getStandardCycle() - vo.getUsedDays();
+            vo.setDaysLeft(Math.max(daysLeft, 0));
+        } else {
+            vo.setCyclePercent(0);
+            vo.setDaysLeft(0);
+        }
+
+        String stage = determineStage(vo.getCyclePercent(), accessory.getWornStatus());
+        vo.setStage(stage);
+        vo.setStageLabel(getStageLabel(stage));
+        return vo;
+    }
+
+    private LocalDate getLastReplaceDate(Long accessoryId) {
+        LambdaQueryWrapper<ReplacementRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ReplacementRecord::getAccessoryId, accessoryId);
+        wrapper.orderByDesc(ReplacementRecord::getReplaceDate);
+        wrapper.last("LIMIT 1");
+        ReplacementRecord last = replacementRecordMapper.selectOne(wrapper);
+        return last != null ? last.getReplaceDate() : null;
+    }
+
+    private String determineStage(int cyclePercent, String wornStatus) {
+        if ("broken".equals(wornStatus)) return "broken";
+        if (cyclePercent >= 100 || "severe".equals(wornStatus)) return "expired";
+        if (cyclePercent >= 80) return "warning";
+        if (cyclePercent >= 50) return "aging";
+        return "fresh";
+    }
+
+    private String getStageLabel(String stage) {
+        switch (stage) {
+            case "fresh": return "初期";
+            case "aging": return "中期";
+            case "warning": return "临近更换";
+            case "expired": return "已超期";
+            case "broken": return "已损坏";
+            default: return "未知";
+        }
     }
 }

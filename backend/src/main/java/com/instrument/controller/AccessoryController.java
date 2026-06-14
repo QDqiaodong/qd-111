@@ -6,6 +6,7 @@ import com.instrument.dto.AccessoryDTO;
 import com.instrument.dto.AccessoryQueryDTO;
 import com.instrument.entity.Accessory;
 import com.instrument.service.AccessoryService;
+import com.instrument.vo.AccessoryLifecycleVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -72,5 +73,15 @@ public class AccessoryController {
             return Result.error("参数不完整");
         }
         return accessoryService.batchUpdateStatus(ids, status) ? Result.success() : Result.error("更新失败");
+    }
+
+    @GetMapping("/{id}/lifecycle")
+    public Result<AccessoryLifecycleVO> getLifecycle(@PathVariable Long id) {
+        return Result.success(accessoryService.getLifecycle(id));
+    }
+
+    @GetMapping("/lifecycle")
+    public Result<List<AccessoryLifecycleVO>> listLifecycle(AccessoryQueryDTO query) {
+        return Result.success(accessoryService.listLifecycle(query));
     }
 }

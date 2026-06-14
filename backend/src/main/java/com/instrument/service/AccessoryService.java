@@ -4,6 +4,7 @@ import com.instrument.common.PageResult;
 import com.instrument.dto.AccessoryDTO;
 import com.instrument.dto.AccessoryQueryDTO;
 import com.instrument.entity.Accessory;
+import com.instrument.vo.AccessoryLifecycleVO;
 
 import java.util.List;
 
@@ -28,4 +29,8 @@ public interface AccessoryService {
     long countByGroup(Long groupId);
 
     long countByStatus(String status);
+
+    AccessoryLifecycleVO getLifecycle(Long id);
+
+    List<AccessoryLifecycleVO> listLifecycle(AccessoryQueryDTO query);
 }

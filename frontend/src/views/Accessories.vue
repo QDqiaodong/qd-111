@@ -81,6 +81,25 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="周期状态" width="160" align="center">
+          <template #default="{ row }">
+            <div class="cycle-status-cell">
+              <div class="cycle-bar-wrap">
+                <div class="cycle-bar-bg">
+                  <div
+                    class="cycle-bar-fill"
+                    :style="{
+                      width: getCyclePercent(row) + '%',
+                      background: getCycleBarColor(row)
+                    }"
+                  />
+                </div>
+                <span class="cycle-bar-pct" :style="{ color: getCycleBarColor(row) }">{{ getCyclePercent(row) }}%</span>
+              </div>
+              <span class="cycle-stage-tag" :class="'stage-' + getCycleStage(row)">{{ getCycleStageLabel(row) }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="purchaseDate" label="购入时间" width="120" />
         <el-table-column label="操作" width="200" fixed="right" align="center">
           <template #default="{ row }">
@@ -220,22 +239,113 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="viewVisible" title="配件详情" width="600px">
-      <el-descriptions :column="2" border v-if="currentRow">
-        <el-descriptions-item label="配件名称">{{ currentRow.name }}</el-descriptions-item>
-        <el-descriptions-item label="配件类型">{{ currentRow.typeName }}</el-descriptions-item>
-        <el-descriptions-item label="规格参数">{{ currentRow.specification }}</el-descriptions-item>
-        <el-descriptions-item label="适配乐器">{{ currentRow.instrumentName }}</el-descriptions-item>
-        <el-descriptions-item label="所属分组">{{ currentRow.groupName }}</el-descriptions-item>
-        <el-descriptions-item label="损耗状态">
-          <el-tag :type="getWornTagType(currentRow.wornStatus)" size="small">{{ getWornLabel(currentRow.wornStatus) }}</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="购入时间">{{ currentRow.purchaseDate }}</el-descriptions-item>
-        <el-descriptions-item label="更换周期(天)">{{ currentRow.standardCycle }}</el-descriptions-item>
-        <el-descriptions-item label="品牌型号">{{ currentRow.brandModel || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ currentRow.createTime }}</el-descriptions-item>
-        <el-descriptions-item label="备注" :span="2">{{ currentRow.remark || '-' }}</el-descriptions-item>
-      </el-descriptions>
+    <el-dialog v-model="viewVisible" title="配件详情" width="720px" destroy-on-close>
+      <template v-if="currentRow">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="配件名称">{{ currentRow.name }}</el-descriptions-item>
+          <el-descriptions-item label="配件类型">{{ currentRow.typeName }}</el-descriptions-item>
+          <el-descriptions-item label="规格参数">{{ currentRow.specification }}</el-descriptions-item>
+          <el-descriptions-item label="适配乐器">{{ currentRow.instrumentName }}</el-descriptions-item>
+          <el-descriptions-item label="所属分组">{{ currentRow.groupName }}</el-descriptions-item>
+          <el-descriptions-item label="损耗状态">
+            <el-tag :type="getWornTagType(currentRow.wornStatus)" size="small">{{ getWornLabel(currentRow.wornStatus) }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="购入时间">{{ currentRow.purchaseDate }}</el-descriptions-item>
+          <el-descriptions-item label="更换周期(天)">{{ currentRow.standardCycle }}</el-descriptions-item>
+          <el-descriptions-item label="品牌型号">{{ currentRow.brandModel || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ currentRow.createTime }}</el-descriptions-item>
+          <el-descriptions-item label="备注" :span="2">{{ currentRow.remark || '-' }}</el-descriptions-item>
+        </el-descriptions>
+
+        <div class="lifecycle-section">
+          <div class="lifecycle-section-title">
+            <el-icon><Timer /></el-icon>
+            生命周期视图
+          </div>
+          <div v-loading="lifecycleLoading" class="lifecycle-timeline-wrap">
+            <template v-if="lifecycleData">
+              <div class="lifecycle-overview">
+                <div class="lifecycle-stage-badge" :class="'stage-' + lifecycleData.stage">
+                  {{ lifecycleData.stageLabel }}
+                </div>
+                <div class="lifecycle-progress-wrap">
+                  <div class="lifecycle-progress-bar">
+                    <div
+                      class="lifecycle-progress-fill"
+                      :style="{
+                        width: lifecycleData.cyclePercent + '%',
+                        background: getStageColor(lifecycleData.stage)
+                      }"
+                    />
+                    <div class="lifecycle-progress-markers">
+                      <div class="lifecycle-marker" style="left: 0%">
+                        <span class="marker-label">采购</span>
+                      </div>
+                      <div class="lifecycle-marker" style="left: 50%">
+                        <span class="marker-label">中期</span>
+                      </div>
+                      <div class="lifecycle-marker" style="left: 80%">
+                        <span class="marker-label">预警</span>
+                      </div>
+                      <div class="lifecycle-marker" style="left: 100%">
+                        <span class="marker-label">到期</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lifecycle-progress-info">
+                    已使用 {{ lifecycleData.usedDays }} 天 / 标准周期 {{ currentRow.standardCycle }} 天
+                  </div>
+                </div>
+              </div>
+
+              <div class="lifecycle-timeline">
+                <div class="timeline-item">
+                  <div class="timeline-dot dot-purchase" />
+                  <div class="timeline-content">
+                    <div class="timeline-label">采购日期</div>
+                    <div class="timeline-value">{{ currentRow.purchaseDate || '-' }}</div>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-dot dot-cycle" />
+                  <div class="timeline-content">
+                    <div class="timeline-label">标准更换周期</div>
+                    <div class="timeline-value">{{ currentRow.standardCycle ? currentRow.standardCycle + ' 天' : '-' }}</div>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-dot dot-used" />
+                  <div class="timeline-content">
+                    <div class="timeline-label">已使用天数</div>
+                    <div class="timeline-value">
+                      <span :style="{ color: getStageColor(lifecycleData.stage) }">{{ lifecycleData.usedDays }}</span> 天
+                      <span class="timeline-sub" v-if="lifecycleData.daysLeft > 0">（剩余 {{ lifecycleData.daysLeft }} 天）</span>
+                      <span class="timeline-sub timeline-sub-danger" v-else>（已超期 {{ Math.abs(lifecycleData.daysLeft) }} 天）</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-dot dot-replace" />
+                  <div class="timeline-content">
+                    <div class="timeline-label">最近更换</div>
+                    <div class="timeline-value">{{ lifecycleData.lastReplaceDate || '暂无更换记录' }}</div>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-dot dot-worn" />
+                  <div class="timeline-content">
+                    <div class="timeline-label">当前损耗</div>
+                    <div class="timeline-value">
+                      <el-tag :type="getWornTagType(currentRow.wornStatus)" size="small">{{ getWornLabel(currentRow.wornStatus) }}</el-tag>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <el-empty v-else description="暂无生命周期数据" :image-size="60" />
+          </div>
+        </div>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -243,8 +353,9 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Timer } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import { accessoryApi, dictApi, groupApi } from '@/api'
+import { accessoryApi, dictApi, groupApi, replacementApi } from '@/api'
 import { compressImage } from '@/utils/image'
 import BatchActionBar from '@/components/BatchActionBar.vue'
 
@@ -261,6 +372,9 @@ const groupList = ref([])
 const accessoryTypes = ref([])
 const wornStatuses = ref([])
 const instruments = ref([])
+const lifecycleLoading = ref(false)
+const lifecycleData = ref(null)
+const replacementHistory = ref([])
 
 const filters = reactive({
   keyword: '',
@@ -456,9 +570,99 @@ const handleEdit = (row) => {
   dialogVisible.value = true
 }
 
-const handleView = (row) => {
+const handleView = async (row) => {
   currentRow.value = row
   viewVisible.value = true
+  lifecycleLoading.value = true
+  lifecycleData.value = null
+  try {
+    const res = await accessoryApi.getLifecycle(row.id)
+    if (res && res.data) {
+      lifecycleData.value = res.data
+    } else {
+      lifecycleData.value = computeLifecycleLocal(row)
+    }
+  } catch {
+    lifecycleData.value = computeLifecycleLocal(row)
+  } finally {
+    lifecycleLoading.value = false
+  }
+  try {
+    const hRes = await replacementApi.history(row.id)
+    replacementHistory.value = hRes.data || hRes || []
+  } catch {
+    replacementHistory.value = []
+  }
+}
+
+const computeLifecycleLocal = (row) => {
+  const purchaseDate = row.purchaseDate ? dayjs(row.purchaseDate) : null
+  const standardCycle = row.standardCycle || 0
+  const usedDays = purchaseDate ? dayjs().diff(purchaseDate, 'day') : 0
+  const cyclePercent = standardCycle > 0 ? Math.min(Math.round((usedDays / standardCycle) * 100), 100) : 0
+  const daysLeft = standardCycle > 0 ? Math.max(standardCycle - usedDays, 0) : 0
+  let lastReplaceDate = null
+  if (replacementHistory.value.length > 0) {
+    const sorted = [...replacementHistory.value].sort((a, b) => dayjs(b.replaceDate).valueOf() - dayjs(a.replaceDate).valueOf())
+    lastReplaceDate = sorted[0].replaceDate
+  }
+  const stage = determineStage(cyclePercent, row.wornStatus)
+  return {
+    accessoryId: row.id,
+    name: row.name,
+    purchaseDate: row.purchaseDate,
+    standardCycle,
+    usedDays: Math.max(usedDays, 0),
+    daysLeft,
+    cyclePercent,
+    lastReplaceDate,
+    wornStatus: row.wornStatus,
+    stage,
+    stageLabel: getStageLabelByCode(stage)
+  }
+}
+
+const determineStage = (cyclePercent, wornStatus) => {
+  if (wornStatus === 'broken') return 'broken'
+  if (cyclePercent >= 100 || wornStatus === 'severe') return 'expired'
+  if (cyclePercent >= 80) return 'warning'
+  if (cyclePercent >= 50) return 'aging'
+  return 'fresh'
+}
+
+const getStageLabelByCode = (stage) => {
+  const map = { fresh: '初期', aging: '中期', warning: '临近更换', expired: '已超期', broken: '已损坏' }
+  return map[stage] || '未知'
+}
+
+const getStageColor = (stage) => {
+  const map = { fresh: '#67c23a', aging: '#409eff', warning: '#e6a23c', expired: '#f56c6c', broken: '#909399' }
+  return map[stage] || '#c0c4cc'
+}
+
+const getCyclePercent = (row) => {
+  if (!row.standardCycle || row.standardCycle <= 0) return 0
+  const purchaseDate = row.purchaseDate ? dayjs(row.purchaseDate) : null
+  if (!purchaseDate) return 0
+  const usedDays = dayjs().diff(purchaseDate, 'day')
+  return Math.min(Math.round((usedDays / row.standardCycle) * 100), 100)
+}
+
+const getCycleBarColor = (row) => {
+  const pct = getCyclePercent(row)
+  if (pct >= 100) return '#f56c6c'
+  if (pct >= 80) return '#e6a23c'
+  if (pct >= 50) return '#409eff'
+  return '#67c23a'
+}
+
+const getCycleStage = (row) => {
+  const pct = getCyclePercent(row)
+  return determineStage(pct, row.wornStatus)
+}
+
+const getCycleStageLabel = (row) => {
+  return getStageLabelByCode(getCycleStage(row))
 }
 
 const handleDelete = (row) => {
@@ -572,3 +776,280 @@ onMounted(() => {
   loadList()
 })
 </script>
+
+<style lang="scss" scoped>
+.cycle-status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+
+  .cycle-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .cycle-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: #ebeef5;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .cycle-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  .cycle-bar-pct {
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 32px;
+    text-align: right;
+  }
+
+  .cycle-stage-tag {
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    line-height: 1.6;
+
+    &.stage-fresh {
+      background: #f0f9eb;
+      color: #67c23a;
+    }
+    &.stage-aging {
+      background: #ecf5ff;
+      color: #409eff;
+    }
+    &.stage-warning {
+      background: #fdf6ec;
+      color: #e6a23c;
+    }
+    &.stage-expired {
+      background: #fef0f0;
+      color: #f56c6c;
+    }
+    &.stage-broken {
+      background: #f4f4f5;
+      color: #909399;
+    }
+  }
+}
+
+.lifecycle-section {
+  margin-top: 20px;
+  border-top: 1px solid #ebeef5;
+  padding-top: 20px;
+}
+
+.lifecycle-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .el-icon {
+    color: #409eff;
+  }
+}
+
+.lifecycle-timeline-wrap {
+  min-height: 100px;
+}
+
+.lifecycle-overview {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #fafbfc;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+}
+
+.lifecycle-stage-badge {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &.stage-fresh {
+    background: #f0f9eb;
+    color: #67c23a;
+  }
+  &.stage-aging {
+    background: #ecf5ff;
+    color: #409eff;
+  }
+  &.stage-warning {
+    background: #fdf6ec;
+    color: #e6a23c;
+  }
+  &.stage-expired {
+    background: #fef0f0;
+    color: #f56c6c;
+  }
+  &.stage-broken {
+    background: #f4f4f5;
+    color: #909399;
+  }
+}
+
+.lifecycle-progress-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.lifecycle-progress-bar {
+  position: relative;
+  height: 10px;
+  background: #ebeef5;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.lifecycle-progress-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.6s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.lifecycle-progress-markers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.lifecycle-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.12);
+
+  .marker-label {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: #909399;
+    white-space: nowrap;
+  }
+}
+
+.lifecycle-progress-info {
+  margin-top: 22px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.lifecycle-timeline {
+  position: relative;
+  padding-left: 24px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: linear-gradient(to bottom, #409eff, #67c23a, #e6a23c, #f56c6c);
+    border-radius: 1px;
+  }
+}
+
+.timeline-item {
+  position: relative;
+  padding-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -20px;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px currentColor;
+
+  &.dot-purchase {
+    color: #409eff;
+    background: #409eff;
+  }
+  &.dot-cycle {
+    color: #67c23a;
+    background: #67c23a;
+  }
+  &.dot-used {
+    color: #e6a23c;
+    background: #e6a23c;
+  }
+  &.dot-replace {
+    color: #909399;
+    background: #909399;
+  }
+  &.dot-worn {
+    color: #f56c6c;
+    background: #f56c6c;
+  }
+}
+
+.timeline-content {
+  padding-left: 4px;
+}
+
+.timeline-label {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 2px;
+}
+
+.timeline-value {
+  font-size: 14px;
+  color: #303133;
+  font-weight: 500;
+}
+
+.timeline-sub {
+  font-size: 12px;
+  color: #909399;
+  font-weight: 400;
+
+  &.timeline-sub-danger {
+    color: #f56c6c;
+  }
+}
+
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  border-top: 1px solid #ebeef5;
+}
+</style>

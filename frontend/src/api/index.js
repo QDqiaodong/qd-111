@@ -8,7 +8,9 @@ export const accessoryApi = {
   update: (data) => request.put('/accessory', data),
   remove: (ids) => request.delete('/accessory', { data: { ids } }),
   updateStatus: (id, status) => request.patch(`/accessory/${id}/status`, { status }),
-  batchUpdateStatus: (ids, status) => request.patch('/accessory/batch-status', { ids, status })
+  batchUpdateStatus: (ids, status) => request.patch('/accessory/batch-status', { ids, status }),
+  getLifecycle: (id) => request.get(`/accessory/${id}/lifecycle`),
+  listLifecycle: (params) => request.get('/accessory/lifecycle', { params })
 }
 
 export const replacementApi = {
