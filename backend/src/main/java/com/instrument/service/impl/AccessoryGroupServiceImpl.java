@@ -120,11 +120,11 @@ public class AccessoryGroupServiceImpl implements AccessoryGroupService {
         List<Long> accessoryIds = accessories.stream().map(Accessory::getId).collect(Collectors.toList());
         int recentReplacementCount = 0;
         if (!accessoryIds.isEmpty()) {
-            recentReplacementCount = (int) recordMapper.selectCount(
+            recentReplacementCount = recordMapper.selectCount(
                     new LambdaQueryWrapper<ReplacementRecord>()
                             .in(ReplacementRecord::getAccessoryId, accessoryIds)
                             .ge(ReplacementRecord::getReplaceDate, recentStart)
-            );
+            ).intValue();
         }
 
         int severeDeduction = Math.min(severeCount * SEVERE_DEDUCTION, SEVERE_MAX);
