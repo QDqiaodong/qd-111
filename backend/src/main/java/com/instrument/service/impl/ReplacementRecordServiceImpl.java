@@ -65,7 +65,7 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         ReplacementRecord entity = new ReplacementRecord();
         BeanUtils.copyProperties(dto, entity);
         fillAccessoryInfo(entity, dto.getAccessoryId());
-        calculateUsageDays(entity, dto.getAccessoryId());
+        calculateUsageDays(entity, dto.getAccessoryId(), null);
         return recordMapper.insert(entity) > 0;
     }
 
@@ -75,6 +75,7 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         ReplacementRecord entity = new ReplacementRecord();
         BeanUtils.copyProperties(dto, entity);
         fillAccessoryInfo(entity, dto.getAccessoryId());
+        calculateUsageDays(entity, dto.getAccessoryId(), dto.getId());
         return recordMapper.updateById(entity) > 0;
     }
 
@@ -96,11 +97,22 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         }
     }
 
-    private void calculateUsageDays(ReplacementRecord entity, Long accessoryId) {
+    private void calculateUsageDays(ReplacementRecord entity, Long accessoryId, Long excludeId) {
         if (entity.getReplaceDate() == null || accessoryId == null) return;
         List<ReplacementRecord> history = history(accessoryId);
+        if (excludeId != null) {
+            history = history.stream()
+                    .filter(r -> !r.getId().equals(excludeId))
+                    .toList();
+        }
         if (history.isEmpty()) {
-            entity.setUsageDays(0);
+            Accessory accessory = accessoryMapper.selectById(accessoryId);
+            if (accessory != null && accessory.getPurchaseDate() != null) {
+                long days = ChronoUnit.DAYS.between(accessory.getPurchaseDate(), entity.getReplaceDate());
+                entity.setUsageDays((int) Math.max(days, 0));
+            } else {
+                entity.setUsageDays(0);
+            }
             return;
         }
         history.sort(Comparator.comparing(ReplacementRecord::getReplaceDate).reversed());

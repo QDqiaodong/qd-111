@@ -169,7 +169,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import { replacementApi, accessoryApi } from '@/api'
@@ -214,8 +214,19 @@ const rules = {
 
 const lastReplaceInfo = computed(() => {
   if (!form.accessoryId || !form.replaceDate) return ''
-  const history = historyList.value.filter(h => h.accessoryId === form.accessoryId)
-  if (history.length === 0) return '首次登记'
+  const excludeId = form.id
+  let history = historyList.value.filter(h => h.accessoryId === form.accessoryId)
+  if (excludeId) {
+    history = history.filter(h => h.id !== excludeId)
+  }
+  if (history.length === 0) {
+    const acc = accessoryList.value.find(a => a.id === form.accessoryId)
+    if (acc && acc.purchaseDate) {
+      const days = dayjs(form.replaceDate).diff(dayjs(acc.purchaseDate), 'day')
+      return `${acc.purchaseDate}（购入日期，距本次 ${Math.max(days, 0)} 天）`
+    }
+    return '首次登记'
+  }
   const last = history
     .map(h => h.replaceDate)
     .sort((a, b) => dayjs(b).valueOf() - dayjs(a).valueOf())[0]
@@ -230,12 +241,12 @@ const loadAccessories = async () => {
     accessoryList.value = res.data || res || []
   } catch {
     accessoryList.value = [
-      { id: 1, name: '木吉他琴弦', specification: '012-053 磷铜覆膜', instrumentName: '木吉他', standardCycle: 90, imageUrl: '' },
-      { id: 2, name: '小提琴松香', specification: '无尘轻型 4/4', instrumentName: '小提琴', standardCycle: 180, imageUrl: '' },
-      { id: 3, name: '电吉他拨片', specification: '0.88mm 尼龙防滑', instrumentName: '电吉他', standardCycle: 60, imageUrl: '' },
-      { id: 4, name: '小提琴琴弓', specification: '4/4 巴西木 八角弓', instrumentName: '小提琴', standardCycle: 365, imageUrl: '' },
-      { id: 5, name: '吉他变调夹', specification: '弹簧式 金属款', instrumentName: '木吉他', standardCycle: 730, imageUrl: '' },
-      { id: 6, name: '指板清洁剂', specification: '柠檬油 100ml', instrumentName: '木吉他', standardCycle: 180, imageUrl: '' }
+      { id: 1, name: '木吉他琴弦', specification: '012-053 磷铜覆膜', instrumentName: '木吉他', standardCycle: 90, imageUrl: '', purchaseDate: '2025-12-01' },
+      { id: 2, name: '小提琴松香', specification: '无尘轻型 4/4', instrumentName: '小提琴', standardCycle: 180, imageUrl: '', purchaseDate: '2025-11-15' },
+      { id: 3, name: '电吉他拨片', specification: '0.88mm 尼龙防滑', instrumentName: '电吉他', standardCycle: 60, imageUrl: '', purchaseDate: '2026-01-01' },
+      { id: 4, name: '小提琴琴弓', specification: '4/4 巴西木 八角弓', instrumentName: '小提琴', standardCycle: 365, imageUrl: '', purchaseDate: '2025-06-01' },
+      { id: 5, name: '吉他变调夹', specification: '弹簧式 金属款', instrumentName: '木吉他', standardCycle: 730, imageUrl: '', purchaseDate: '2024-01-15' },
+      { id: 6, name: '指板清洁剂', specification: '柠檬油 100ml', instrumentName: '木吉他', standardCycle: 180, imageUrl: '', purchaseDate: '2025-09-20' }
     ]
   }
 }
@@ -319,10 +330,16 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
-const handleEdit = (row) => {
+const handleEdit = async (row) => {
   dialogMode.value = 'edit'
   Object.assign(form, row)
   dialogVisible.value = true
+  if (form.accessoryId) {
+    try {
+      const res = await replacementApi.history(form.accessoryId)
+      historyList.value = res.data || res || []
+    } catch {}
+  }
 }
 
 const handleAccessoryChange = async (id) => {
