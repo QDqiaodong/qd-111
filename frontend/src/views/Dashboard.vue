@@ -51,38 +51,177 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="16">
-      <el-col :lg="16" :md="24">
-        <el-card class="card-shadow" shadow="never">
-          <template #header>
-            <div class="card-header">
-              <span>即将到期更换</span>
-              <el-tag size="small" type="warning">建议优先处理</el-tag>
-            </div>
-          </template>
-          <el-table :data="upcomingList" stripe style="width: 100%" size="default">
-            <el-table-column prop="name" label="配件名称" min-width="140" />
-            <el-table-column prop="specification" label="规格" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="instrument" label="适配乐器" width="100" />
-            <el-table-column prop="lastReplaceDate" label="上次更换" width="120" />
-            <el-table-column label="使用时长" width="100">
-              <template #default="{ row }">
-                <el-tag type="info" size="small">{{ row.usageDays }}天</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="100">
-              <template #default="{ row }">
-                <el-tag :type="row.daysLeft <= 7 ? 'danger' : row.daysLeft <= 30 ? 'warning' : 'success'" size="small">
-                  {{ row.daysLeft <= 0 ? '已超期' : `剩${row.daysLeft}天` }}
+    <div class="risk-tiers-section">
+      <div class="section-title">
+        <el-icon color="#f56c6c"><Rank /></el-icon>
+        <span>周期风险分层</span>
+        <span class="section-subtitle">按处理优先级从高到低排列</span>
+      </div>
+
+      <el-row :gutter="16">
+        <el-col :lg="12" :md="24">
+          <el-card class="risk-card risk-card-expired card-shadow" shadow="never">
+            <template #header>
+              <div class="risk-card-header">
+                <div class="risk-card-title">
+                  <span class="priority-badge priority-p0">P0</span>
+                  <el-icon color="#f56c6c"><Clock /></el-icon>
+                  <span class="risk-title-text">已超期</span>
+                </div>
+                <el-tag type="danger" effect="dark" size="small">
+                  {{ expiredList.length }} 项需立即处理
                 </el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
-          <el-empty v-if="upcomingList.length === 0" description="暂无即将到期的配件" :image-size="80" />
-        </el-card>
-      </el-col>
-      <el-col :lg="8" :md="24">
-        <el-card class="card-shadow" shadow="never" style="margin-bottom: 16px">
+              </div>
+            </template>
+            <div v-if="expiredGrouped.length > 0" class="risk-content">
+              <div v-for="group in expiredGrouped" :key="group.instrument" class="instrument-group">
+                <div class="instrument-header">
+                  <el-icon color="#f56c6c"><VideoCamera /></el-icon>
+                  <span class="instrument-name">{{ group.instrument }}</span>
+                  <el-tag size="small" type="danger" effect="plain">{{ group.count }}件</el-tag>
+                </div>
+                <div class="accessory-list">
+                  <div v-for="item in group.items" :key="item.id" class="accessory-item">
+                    <div class="accessory-main">
+                      <span class="accessory-name">{{ item.name }}</span>
+                      <el-tag size="small" type="info" effect="plain">{{ item.typeName }}</el-tag>
+                    </div>
+                    <div class="accessory-meta">
+                      <span class="spec-text">{{ item.specification }}</span>
+                      <el-tag size="small" type="danger" effect="dark">超期{{ Math.abs(item.daysLeft) }}天</el-tag>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无已超期配件" :image-size="60" />
+          </el-card>
+        </el-col>
+
+        <el-col :lg="12" :md="24">
+          <el-card class="risk-card risk-card-broken card-shadow" shadow="never">
+            <template #header>
+              <div class="risk-card-header">
+                <div class="risk-card-title">
+                  <span class="priority-badge priority-p0">P0</span>
+                  <el-icon color="#909399"><CircleClose /></el-icon>
+                  <span class="risk-title-text">断裂配件</span>
+                </div>
+                <el-tag type="info" effect="dark" size="small">
+                  {{ brokenList.length }} 项需立即处理
+                </el-tag>
+              </div>
+            </template>
+            <div v-if="brokenGrouped.length > 0" class="risk-content">
+              <div v-for="group in brokenGrouped" :key="group.instrument" class="instrument-group">
+                <div class="instrument-header">
+                  <el-icon color="#909399"><VideoCamera /></el-icon>
+                  <span class="instrument-name">{{ group.instrument }}</span>
+                  <el-tag size="small" type="info" effect="plain">{{ group.count }}件</el-tag>
+                </div>
+                <div class="accessory-list">
+                  <div v-for="item in group.items" :key="item.id" class="accessory-item">
+                    <div class="accessory-main">
+                      <span class="accessory-name">{{ item.name }}</span>
+                      <el-tag size="small" type="info" effect="plain">{{ item.typeName }}</el-tag>
+                    </div>
+                    <div class="accessory-meta">
+                      <span class="spec-text">{{ item.specification }}</span>
+                      <el-tag size="small" type="info" effect="dark">已损坏</el-tag>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无断裂配件" :image-size="60" />
+          </el-card>
+        </el-col>
+      </el-row>
+
+      <el-row :gutter="16" style="margin-top: 16px">
+        <el-col :lg="12" :md="24">
+          <el-card class="risk-card risk-card-severe card-shadow" shadow="never">
+            <template #header>
+              <div class="risk-card-header">
+                <div class="risk-card-title">
+                  <span class="priority-badge priority-p1">P1</span>
+                  <el-icon color="#e6a23c"><Warning /></el-icon>
+                  <span class="risk-title-text">严重损耗</span>
+                </div>
+                <el-tag type="warning" effect="dark" size="small">
+                  {{ severeList.length }} 项建议尽快更换
+                </el-tag>
+              </div>
+            </template>
+            <div v-if="severeGrouped.length > 0" class="risk-content">
+              <div v-for="group in severeGrouped" :key="group.instrument" class="instrument-group">
+                <div class="instrument-header">
+                  <el-icon color="#e6a23c"><VideoCamera /></el-icon>
+                  <span class="instrument-name">{{ group.instrument }}</span>
+                  <el-tag size="small" type="warning" effect="plain">{{ group.count }}件</el-tag>
+                </div>
+                <div class="accessory-list">
+                  <div v-for="item in group.items" :key="item.id" class="accessory-item">
+                    <div class="accessory-main">
+                      <span class="accessory-name">{{ item.name }}</span>
+                      <el-tag size="small" type="info" effect="plain">{{ item.typeName }}</el-tag>
+                    </div>
+                    <div class="accessory-meta">
+                      <span class="spec-text">{{ item.specification }}</span>
+                      <el-tag size="small" type="warning" effect="dark">使用{{ item.usageDays }}天</el-tag>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无严重损耗配件" :image-size="60" />
+          </el-card>
+        </el-col>
+
+        <el-col :lg="12" :md="24">
+          <el-card class="risk-card risk-card-upcoming card-shadow" shadow="never">
+            <template #header>
+              <div class="risk-card-header">
+                <div class="risk-card-title">
+                  <span class="priority-badge priority-p2">P2</span>
+                  <el-icon color="#409eff"><Timer /></el-icon>
+                  <span class="risk-title-text">即将到期</span>
+                </div>
+                <el-tag type="primary" effect="dark" size="small">
+                  {{ upcomingRiskList.length }} 项30天内到期
+                </el-tag>
+              </div>
+            </template>
+            <div v-if="upcomingGrouped.length > 0" class="risk-content">
+              <div v-for="group in upcomingGrouped" :key="group.instrument" class="instrument-group">
+                <div class="instrument-header">
+                  <el-icon color="#409eff"><VideoCamera /></el-icon>
+                  <span class="instrument-name">{{ group.instrument }}</span>
+                  <el-tag size="small" type="primary" effect="plain">{{ group.count }}件</el-tag>
+                </div>
+                <div class="accessory-list">
+                  <div v-for="item in group.items" :key="item.id" class="accessory-item">
+                    <div class="accessory-main">
+                      <span class="accessory-name">{{ item.name }}</span>
+                      <el-tag size="small" type="info" effect="plain">{{ item.typeName }}</el-tag>
+                    </div>
+                    <div class="accessory-meta">
+                      <span class="spec-text">{{ item.specification }}</span>
+                      <el-tag :type="item.daysLeft <= 7 ? 'danger' : 'primary'" size="small" effect="dark">剩{{ item.daysLeft }}天</el-tag>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无即将到期配件" :image-size="60" />
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
+
+    <el-row :gutter="16" style="margin-top: 16px">
+      <el-col :lg="12" :md="24">
+        <el-card class="card-shadow" shadow="never">
           <template #header>
             <span>损耗状态分布</span>
           </template>
@@ -99,6 +238,8 @@
             </div>
           </div>
         </el-card>
+      </el-col>
+      <el-col :lg="12" :md="24">
         <el-card class="card-shadow" shadow="never">
           <template #header>
             <span>物资分组统计</span>
@@ -122,7 +263,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { dashboardApi } from '@/api'
 
 const stats = reactive({
@@ -136,29 +277,72 @@ const upcomingList = ref([])
 const wornDist = ref([])
 const groupDist = ref([])
 
+const expiredList = ref([])
+const brokenList = ref([])
+const severeList = ref([])
+const upcomingRiskList = ref([])
+
+const groupByInstrument = (list) => {
+  const map = new Map()
+  list.forEach(item => {
+    const key = item.instrumentName || item.instrument || '未知乐器'
+    if (!map.has(key)) {
+      map.set(key, { instrument: key, count: 0, items: [] })
+    }
+    const group = map.get(key)
+    group.count++
+    group.items.push(item)
+  })
+  return Array.from(map.values()).sort((a, b) => b.count - a.count)
+}
+
+const expiredGrouped = computed(() => groupByInstrument(expiredList.value))
+const brokenGrouped = computed(() => groupByInstrument(brokenList.value))
+const severeGrouped = computed(() => groupByInstrument(severeList.value))
+const upcomingGrouped = computed(() => groupByInstrument(upcomingRiskList.value))
+
 const loadData = async () => {
   try {
-    const [s, u, w, g] = await Promise.all([
+    const [s, u, w, g, r] = await Promise.all([
       dashboardApi.stats(),
       dashboardApi.upcomingReplacements(),
       dashboardApi.wornDistribution(),
-      dashboardApi.groupDistribution()
+      dashboardApi.groupDistribution(),
+      dashboardApi.riskTiers().catch(() => null)
     ])
     Object.assign(stats, s.data || s || {})
     upcomingList.value = u.data || u || []
     wornDist.value = w.data || w || []
     groupDist.value = g.data || g || []
+
+    if (r && (r.data || r)) {
+      const riskData = r.data || r
+      expiredList.value = riskData.expired || []
+      brokenList.value = riskData.broken || []
+      severeList.value = riskData.severe || []
+      upcomingRiskList.value = riskData.upcoming || []
+    } else {
+      categorizeFromUpcoming()
+    }
   } catch {
     loadMockData()
   }
 }
 
+const categorizeFromUpcoming = () => {
+  const list = upcomingList.value
+  expiredList.value = list.filter(i => i.daysLeft <= 0)
+  brokenList.value = list.filter(i => i.wornStatus === 'broken')
+  severeList.value = list.filter(i => i.wornStatus === 'severe' && i.daysLeft > 0)
+  upcomingRiskList.value = list.filter(i => i.daysLeft > 0 && i.daysLeft <= 30 && i.wornStatus !== 'severe' && i.wornStatus !== 'broken')
+}
+
 const loadMockData = () => {
   Object.assign(stats, { totalAccessories: 28, wornCount: 5, monthReplacements: 3, groupCount: 3 })
   upcomingList.value = [
-    { name: '吉他琴弦', specification: '012-053 磷铜', instrument: '木吉他', lastReplaceDate: '2026-04-15', usageDays: 60, daysLeft: -10 },
-    { name: '小提琴松香', specification: '无尘轻型', instrument: '小提琴', lastReplaceDate: '2026-05-01', usageDays: 44, daysLeft: 16 },
-    { name: '拨片', specification: '0.88mm 尼龙', instrument: '电吉他', lastReplaceDate: '2026-05-20', usageDays: 25, daysLeft: 35 }
+    { id: 1, name: '吉他琴弦', typeName: '琴弦', specification: '012-053 磷铜', instrumentName: '木吉他', lastReplaceDate: '2026-04-15', usageDays: 60, daysLeft: -10, wornStatus: 'severe' },
+    { id: 2, name: '小提琴松香', typeName: '松香', specification: '无尘轻型', instrumentName: '小提琴', lastReplaceDate: '2026-05-01', usageDays: 44, daysLeft: 16, wornStatus: 'good' },
+    { id: 3, name: '拨片', typeName: '拨片', specification: '0.88mm 尼龙', instrumentName: '电吉他', lastReplaceDate: '2026-05-20', usageDays: 25, daysLeft: 35, wornStatus: 'good' }
   ]
   wornDist.value = [
     { status: 'good', label: '完好', count: 18, percent: 64, color: '#67c23a' },
@@ -169,6 +353,29 @@ const loadMockData = () => {
     { id: 1, name: '弹奏配件', count: 12, percent: 43 },
     { id: 2, name: '辅助工具', count: 8, percent: 29 },
     { id: 3, name: '养护耗材', count: 8, percent: 28 }
+  ]
+
+  expiredList.value = [
+    { id: 101, name: '木吉他琴弦', typeName: '琴弦', specification: '012-053 磷铜覆膜', instrumentName: '木吉他', usageDays: 105, daysLeft: -15, wornStatus: 'severe' },
+    { id: 102, name: '电吉他琴弦', typeName: '琴弦', specification: '009-042 镍钢', instrumentName: '电吉他', usageDays: 120, daysLeft: -30, wornStatus: 'severe' },
+    { id: 103, name: '小提琴琴弓', typeName: '琴弓', specification: '4/4 巴西木 八角弓', instrumentName: '小提琴', usageDays: 400, daysLeft: -35, wornStatus: 'slight' }
+  ]
+
+  brokenList.value = [
+    { id: 201, name: '吉他背带', typeName: '背带', specification: '皮革款 加厚', instrumentName: '木吉他', usageDays: 200, daysLeft: 100, wornStatus: 'broken' },
+    { id: 202, name: '变调夹', typeName: '变调夹', specification: '弹簧式 金属款', instrumentName: '电吉他', usageDays: 500, daysLeft: 230, wornStatus: 'broken' }
+  ]
+
+  severeList.value = [
+    { id: 301, name: '小提琴松香', typeName: '松香', specification: '无尘轻型 4/4', instrumentName: '小提琴', usageDays: 150, daysLeft: 30, wornStatus: 'severe' },
+    { id: 302, name: '指板清洁剂', typeName: '清洁用品', specification: '柠檬油 100ml', instrumentName: '木吉他', usageDays: 200, daysLeft: -20, wornStatus: 'severe' },
+    { id: 303, name: '贝斯琴弦', typeName: '琴弦', specification: '045-105 镍钢', instrumentName: '贝斯', usageDays: 180, daysLeft: 10, wornStatus: 'severe' }
+  ]
+
+  upcomingRiskList.value = [
+    { id: 401, name: '拨片', typeName: '拨片', specification: '0.88mm 尼龙防滑', instrumentName: '电吉他', usageDays: 45, daysLeft: 15, wornStatus: 'slight' },
+    { id: 402, name: '尤克里里琴弦', typeName: '琴弦', specification: '碳素弦 低张力', instrumentName: '尤克里里', usageDays: 80, daysLeft: 10, wornStatus: 'good' },
+    { id: 403, name: '二胡松香', typeName: '松香', specification: '专业微尘型', instrumentName: '二胡', usageDays: 160, daysLeft: 20, wornStatus: 'slight' }
   ]
 }
 
@@ -221,10 +428,186 @@ onMounted(loadData)
   }
 }
 
-.card-header {
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 16px;
+
+  .section-subtitle {
+    font-size: 12px;
+    font-weight: 400;
+    color: #909399;
+    margin-left: 8px;
+  }
+}
+
+.risk-tiers-section {
+  margin-bottom: 16px;
+}
+
+.risk-card {
+  height: 100%;
+  transition: all 0.3s;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+
+  &.risk-card-expired {
+    border-top: 4px solid #f56c6c;
+  }
+
+  &.risk-card-broken {
+    border-top: 4px solid #909399;
+  }
+
+  &.risk-card-severe {
+    border-top: 4px solid #e6a23c;
+  }
+
+  &.risk-card-upcoming {
+    border-top: 4px solid #409eff;
+  }
+}
+
+.risk-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.risk-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .risk-title-text {
+    font-weight: 600;
+    font-size: 15px;
+    color: #303133;
+  }
+}
+
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+
+  &.priority-p0 {
+    background: linear-gradient(135deg, #f56c6c, #c0392b);
+  }
+
+  &.priority-p1 {
+    background: linear-gradient(135deg, #e6a23c, #d35400);
+  }
+
+  &.priority-p2 {
+    background: linear-gradient(135deg, #409eff, #2980b9);
+  }
+}
+
+.risk-content {
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #dcdfe6;
+    border-radius: 3px;
+  }
+}
+
+.instrument-group {
+  margin-bottom: 16px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.instrument-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fafbfc;
+  border-radius: 6px;
+  margin-bottom: 8px;
+
+  .instrument-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    color: #303133;
+  }
+}
+
+.accessory-list {
+  padding-left: 4px;
+}
+
+.accessory-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #f5f7fa;
+    border-color: #dcdfe6;
+  }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.accessory-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  .accessory-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #303133;
+  }
+}
+
+.accessory-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+
+  .spec-text {
+    flex: 1;
+    font-size: 12px;
+    color: #909399;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .distribution-list {

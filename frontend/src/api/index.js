@@ -43,5 +43,7 @@ export const dashboardApi = {
   stats: () => request.get('/dashboard/stats'),
   upcomingReplacements: () => request.get('/dashboard/upcoming-replacements'),
   wornDistribution: () => request.get('/dashboard/worn-distribution'),
-  groupDistribution: () => request.get('/dashboard/group-distribution')
+  groupDistribution: () => request.get('/dashboard/group-distribution'),
+  riskTierList: (tier) => request.get(`/dashboard/risk-tier/${tier}`),
+  riskTiers: () => request.get('/dashboard/risk-tiers')
 }
