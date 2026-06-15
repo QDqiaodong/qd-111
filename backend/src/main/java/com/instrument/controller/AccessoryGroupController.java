@@ -3,6 +3,7 @@ package com.instrument.controller;
 import com.instrument.common.Result;
 import com.instrument.entity.AccessoryGroup;
 import com.instrument.service.AccessoryGroupService;
+import com.instrument.vo.GroupHealthScoreVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +30,16 @@ public class AccessoryGroupController {
     @GetMapping("/{id}")
     public Result<AccessoryGroup> getById(@PathVariable Long id) {
         return Result.success(groupService.getById(id));
+    }
+
+    @GetMapping("/{id}/health-score")
+    public Result<GroupHealthScoreVO> healthScore(@PathVariable Long id) {
+        return Result.success(groupService.healthScore(id));
+    }
+
+    @GetMapping("/health-scores")
+    public Result<List<GroupHealthScoreVO>> healthScores() {
+        return Result.success(groupService.healthScores());
     }
 
     @PostMapping

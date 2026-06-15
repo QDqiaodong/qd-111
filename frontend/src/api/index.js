@@ -29,7 +29,9 @@ export const groupApi = {
   getById: (id) => request.get(`/group/${id}`),
   add: (data) => request.post('/group', data),
   update: (data) => request.put('/group', data),
-  remove: (id) => request.delete(`/group/${id}`)
+  remove: (id) => request.delete(`/group/${id}`),
+  healthScore: (id) => request.get(`/group/${id}/health-score`),
+  healthScores: () => request.get('/group/health-scores')
 }
 
 export const dictApi = {

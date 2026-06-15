@@ -31,7 +31,16 @@
               <div class="tree-node" :class="{ active: currentGroupId === data.id }">
                 <el-icon color="#409eff"><Folder v-if="!data.count" /><FolderOpened v-else /></el-icon>
                 <span class="node-label">{{ data.name }}</span>
-                <el-tag size="small" type="info" effect="plain" class="node-count">{{ data.count || 0 }}</el-tag>
+                <div v-if="data.healthScore != null" class="node-health-bar">
+                  <div class="health-bar-track">
+                    <div
+                      class="health-bar-fill"
+                      :style="{ width: data.healthScore + '%', backgroundColor: data.healthColor }"
+                    ></div>
+                  </div>
+                  <span class="health-bar-score" :style="{ color: data.healthColor }">{{ data.healthScore }}</span>
+                </div>
+                <el-tag v-else size="small" type="info" effect="plain" class="node-count">{{ data.count || 0 }}</el-tag>
               </div>
             </template>
           </el-tree>
@@ -42,7 +51,56 @@
       </el-col>
 
       <el-col :lg="18" :md="16" :sm="14" :xs="24">
-        <el-card class="card-shadow" shadow="never">
+        <el-card v-if="currentHealthScore" class="card-shadow health-score-card" shadow="never">
+          <div class="health-score-header">
+            <div class="health-score-left">
+              <div class="health-score-circle" :style="{ borderColor: currentHealthScore.color }">
+                <span class="health-score-value" :style="{ color: currentHealthScore.color }">{{ currentHealthScore.score }}</span>
+                <span class="health-score-label">健康评分</span>
+              </div>
+              <div class="health-score-meta">
+                <div class="health-level-tag" :style="{ backgroundColor: currentHealthScore.color + '18', color: currentHealthScore.color, borderColor: currentHealthScore.color + '40' }">
+                  {{ currentHealthScore.level }}
+                </div>
+                <div class="health-meta-text">{{ currentHealthScore.groupName }} · 共 {{ currentHealthScore.totalCount }} 件</div>
+              </div>
+            </div>
+            <div class="health-score-right">
+              <div class="health-detail-grid">
+                <div class="health-detail-item">
+                  <span class="detail-count" style="color: #e6a23c">{{ currentHealthScore.severeCount }}</span>
+                  <span class="detail-label">严重损耗</span>
+                </div>
+                <div class="health-detail-item">
+                  <span class="detail-count" style="color: #f56c6c">{{ currentHealthScore.brokenCount }}</span>
+                  <span class="detail-label">已损坏</span>
+                </div>
+                <div class="health-detail-item">
+                  <span class="detail-count" style="color: #e6a23c">{{ currentHealthScore.overdueCount }}</span>
+                  <span class="detail-label">超期未换</span>
+                </div>
+                <div class="health-detail-item">
+                  <span class="detail-count" style="color: #409eff">{{ currentHealthScore.recentReplacementCount }}</span>
+                  <span class="detail-label">近期更换</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="health-detail-bars">
+            <div v-for="item in currentHealthScore.details" :key="item.factor" class="health-detail-bar-row">
+              <span class="bar-label">{{ item.label }}</span>
+              <div class="bar-track">
+                <div class="bar-bg">
+                  <div class="bar-deduction" :style="{ width: (item.deduction / item.maxDeduction * 100) + '%' }"></div>
+                </div>
+              </div>
+              <span class="bar-value">-{{ item.deduction }}分</span>
+              <span class="bar-count">{{ item.count }}项</span>
+            </div>
+          </div>
+        </el-card>
+
+        <el-card class="card-shadow" shadow="never" style="margin-top: 16px">
           <template #header>
             <div class="card-header">
               <div class="group-title">
@@ -158,7 +216,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { groupApi, accessoryApi, dictApi } from '@/api'
 
@@ -175,6 +233,7 @@ const currentGroupId = ref(null)
 const expandedKeys = ref([])
 const selectedRows = ref([])
 const targetGroupId = ref(null)
+const healthScoreMap = ref({})
 const wornStatuses = ref([
   { code: 'good', label: '完好' },
   { code: 'slight', label: '轻微磨损' },
@@ -200,6 +259,11 @@ const groupRules = {
 
 const currentGroup = computed(() => groupList.value.find(g => g.id === currentGroupId.value))
 
+const currentHealthScore = computed(() => {
+  if (!currentGroupId.value) return null
+  return healthScoreMap.value[currentGroupId.value] || null
+})
+
 const currentGroupAccessories = computed(() => {
   if (!currentGroupId.value) return []
   return allAccessories.value.filter(a => a.groupId === currentGroupId.value)
@@ -220,7 +284,13 @@ const filteredAccessories = computed(() => {
 const treeData = computed(() => {
   return groupList.value.map(g => {
     const count = allAccessories.value.filter(a => a.groupId === g.id).length
-    return { ...g, count }
+    const hs = healthScoreMap.value[g.id]
+    return {
+      ...g,
+      count,
+      healthScore: hs ? hs.score : null,
+      healthColor: hs ? hs.color : null
+    }
   }).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
 })
 
@@ -257,18 +327,87 @@ const loadAccessories = async () => {
     allAccessories.value = res.data || res || []
   } catch {
     allAccessories.value = [
-      { id: 1, name: '木吉他琴弦', specification: '012-053 磷铜覆膜', typeCode: 'string', typeName: '琴弦', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 1, wornStatus: 'slight', purchaseDate: '2026-04-01', imageUrl: '' },
-      { id: 2, name: '小提琴松香', specification: '无尘轻型 4/4', typeCode: 'rosin', typeName: '松香', instrument: 'violin', instrumentName: '小提琴', groupId: 3, wornStatus: 'good', purchaseDate: '2026-05-01', imageUrl: '' },
-      { id: 3, name: '电吉他拨片', specification: '0.88mm 尼龙防滑', typeCode: 'pick', typeName: '拨片', instrument: 'guitar-electric', instrumentName: '电吉他', groupId: 1, wornStatus: 'good', purchaseDate: '2026-05-10', imageUrl: '' },
-      { id: 4, name: '小提琴琴弓', specification: '4/4 巴西木 八角弓', typeCode: 'bow', typeName: '琴弓', instrument: 'violin', instrumentName: '小提琴', groupId: 1, wornStatus: 'slight', purchaseDate: '2026-01-15', imageUrl: '' },
-      { id: 5, name: '吉他变调夹', specification: '弹簧式 金属款', typeCode: 'capo', typeName: '变调夹', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 2, wornStatus: 'good', purchaseDate: '2025-11-20', imageUrl: '' },
-      { id: 6, name: '指板清洁剂', specification: '柠檬油 100ml', typeCode: 'cleaner', typeName: '清洁用品', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 3, wornStatus: 'severe', purchaseDate: '2025-08-01', imageUrl: '' },
-      { id: 7, name: '贝斯琴弦', specification: '045-105 镍钢', typeCode: 'string', typeName: '琴弦', instrument: 'guitar-bass', instrumentName: '贝斯', groupId: 1, wornStatus: 'broken', purchaseDate: '2025-06-01', imageUrl: '' },
-      { id: 8, name: '尤克里里琴弦', specification: '碳素 高音C', typeCode: 'string', typeName: '琴弦', instrument: 'ukulele', instrumentName: '尤克里里', groupId: 1, wornStatus: 'good', purchaseDate: '2026-03-15', imageUrl: '' }
+      { id: 1, name: '木吉他琴弦', specification: '012-053 磷铜覆膜', typeCode: 'string', typeName: '琴弦', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 1, wornStatus: 'slight', purchaseDate: '2026-04-01', imageUrl: '', standardCycle: 90 },
+      { id: 2, name: '小提琴松香', specification: '无尘轻型 4/4', typeCode: 'rosin', typeName: '松香', instrument: 'violin', instrumentName: '小提琴', groupId: 3, wornStatus: 'good', purchaseDate: '2026-05-01', imageUrl: '', standardCycle: 180 },
+      { id: 3, name: '电吉他拨片', specification: '0.88mm 尼龙防滑', typeCode: 'pick', typeName: '拨片', instrument: 'guitar-electric', instrumentName: '电吉他', groupId: 1, wornStatus: 'good', purchaseDate: '2026-05-10', imageUrl: '', standardCycle: 60 },
+      { id: 4, name: '小提琴琴弓', specification: '4/4 巴西木 八角弓', typeCode: 'bow', typeName: '琴弓', instrument: 'violin', instrumentName: '小提琴', groupId: 1, wornStatus: 'slight', purchaseDate: '2026-01-15', imageUrl: '', standardCycle: 365 },
+      { id: 5, name: '吉他变调夹', specification: '弹簧式 金属款', typeCode: 'capo', typeName: '变调夹', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 2, wornStatus: 'good', purchaseDate: '2025-11-20', imageUrl: '', standardCycle: 730 },
+      { id: 6, name: '指板清洁剂', specification: '柠檬油 100ml', typeCode: 'cleaner', typeName: '清洁用品', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 3, wornStatus: 'severe', purchaseDate: '2025-08-01', imageUrl: '', standardCycle: 180 },
+      { id: 7, name: '贝斯琴弦', specification: '045-105 镍钢', typeCode: 'string', typeName: '琴弦', instrument: 'guitar-bass', instrumentName: '贝斯', groupId: 1, wornStatus: 'broken', purchaseDate: '2025-06-01', imageUrl: '', standardCycle: 90 },
+      { id: 8, name: '尤克里里琴弦', specification: '碳素 高音C', typeCode: 'string', typeName: '琴弦', instrument: 'ukulele', instrumentName: '尤克里里', groupId: 1, wornStatus: 'good', purchaseDate: '2026-03-15', imageUrl: '', standardCycle: 90 }
     ]
   }
   loading.value = false
 }
+
+const loadHealthScores = async () => {
+  try {
+    const res = await groupApi.healthScores()
+    const list = res.data || res || []
+    const map = {}
+    list.forEach(item => {
+      map[item.groupId] = item
+    })
+    healthScoreMap.value = map
+  } catch {
+    const map = {}
+    groupList.value.forEach(g => {
+      const accs = allAccessories.value.filter(a => a.groupId === g.id)
+      const totalCount = accs.length
+      const severeCount = accs.filter(a => a.wornStatus === 'severe').length
+      const brokenCount = accs.filter(a => a.wornStatus === 'broken').length
+      const overdueCount = accs.filter(a => {
+        if (!a.purchaseDate || !a.standardCycle) return false
+        const purchaseDate = new Date(a.purchaseDate)
+        const today = new Date()
+        const diffDays = Math.floor((today - purchaseDate) / (1000 * 60 * 60 * 24))
+        return diffDays > a.standardCycle
+      }).length
+      const recentReplacementCount = 0
+      const severeDeduction = Math.min(severeCount * 5, 30)
+      const brokenDeduction = Math.min(brokenCount * 10, 40)
+      const overdueDeduction = Math.min(overdueCount * 8, 30)
+      const recentDeduction = 0
+      const score = Math.max(0, 100 - severeDeduction - brokenDeduction - overdueDeduction - recentDeduction)
+      let level, color
+      if (score >= 80) { level = '健康'; color = '#67c23a' }
+      else if (score >= 60) { level = '一般'; color = '#e6a23c' }
+      else if (score >= 40) { level = '较差'; color = '#f56c6c' }
+      else { level = '危险'; color = '#c45656' }
+      map[g.id] = {
+        groupId: g.id,
+        groupName: g.name,
+        score,
+        level,
+        color,
+        totalCount,
+        severeCount,
+        brokenCount,
+        overdueCount,
+        recentReplacementCount,
+        details: [
+          { factor: 'severe', label: '严重损耗', count: severeCount, deduction: severeDeduction, maxDeduction: 30 },
+          { factor: 'broken', label: '已损坏/断裂', count: brokenCount, deduction: brokenDeduction, maxDeduction: 40 },
+          { factor: 'overdue', label: '超期未更换', count: overdueCount, deduction: overdueDeduction, maxDeduction: 30 },
+          { factor: 'recent_replacement', label: '近期更换频繁', count: recentReplacementCount, deduction: recentDeduction, maxDeduction: 15 }
+        ]
+      }
+    })
+    healthScoreMap.value = map
+  }
+}
+
+watch(currentGroupId, async (newId) => {
+  if (newId) {
+    try {
+      const res = await groupApi.healthScore(newId)
+      const data = res.data || res
+      if (data) {
+        healthScoreMap.value = { ...healthScoreMap.value, [newId]: data }
+      }
+    } catch {}
+  }
+})
 
 const handleNodeClick = (data) => {
   currentGroupId.value = data.id
@@ -327,6 +466,7 @@ const handleDeleteGroup = (group) => {
         currentGroupId.value = groupList.value[0]?.id || null
       }
       ElMessage.success('删除成功')
+      loadHealthScores()
     } catch (e) {
       groupList.value = originalGroups
       originalAccessories.forEach(oa => {
@@ -358,6 +498,7 @@ const handleGroupSubmit = async () => {
       ElMessage.success('更新成功')
     }
     groupDialogVisible.value = false
+    loadHealthScores()
   } catch (err) {
     if (err?.message === '校验不通过') {
       return
@@ -389,6 +530,7 @@ const confirmMove = async () => {
     tableRef.value.clearSelection()
     moveDialogVisible.value = false
     ElMessage.success(`已移动 ${selectedRows.value.length} 个配件到「${targetGroup?.name || '目标分组'}」`)
+    loadHealthScores()
   } catch (e) {
     originalGroupIds.forEach(og => {
       const acc = allAccessories.value.find(a => a.id === og.id)
@@ -414,6 +556,7 @@ onMounted(() => {
   loadDict()
   loadGroups()
   loadAccessories()
+  loadHealthScores()
 })
 </script>
 
@@ -466,6 +609,182 @@ onMounted(() => {
 
   .node-count {
     font-size: 11px;
+  }
+
+  .node-health-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+
+    .health-bar-track {
+      width: 40px;
+      height: 6px;
+      background: #ebeef5;
+      border-radius: 3px;
+      overflow: hidden;
+
+      .health-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.4s ease, background-color 0.4s ease;
+      }
+    }
+
+    .health-bar-score {
+      font-size: 11px;
+      font-weight: 600;
+      min-width: 20px;
+      text-align: right;
+    }
+  }
+}
+
+.health-score-card {
+  :deep(.el-card__body) {
+    padding: 20px 24px;
+  }
+}
+
+.health-score-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.health-score-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.health-score-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 3px solid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  .health-score-value {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .health-score-label {
+    font-size: 10px;
+    color: #909399;
+    margin-top: 2px;
+  }
+}
+
+.health-score-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  .health-level-tag {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid;
+    width: fit-content;
+  }
+
+  .health-meta-text {
+    font-size: 13px;
+    color: #606266;
+  }
+}
+
+.health-score-right {
+  flex: 1;
+}
+
+.health-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.health-detail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+
+  .detail-count {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .detail-label {
+    font-size: 12px;
+    color: #909399;
+  }
+}
+
+.health-detail-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.health-detail-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  .bar-label {
+    width: 90px;
+    font-size: 13px;
+    color: #606266;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .bar-track {
+    flex: 1;
+
+    .bar-bg {
+      height: 8px;
+      background: #f0f2f5;
+      border-radius: 4px;
+      overflow: hidden;
+
+      .bar-deduction {
+        height: 100%;
+        background: linear-gradient(90deg, #e6a23c, #f56c6c);
+        border-radius: 4px;
+        transition: width 0.5s ease;
+      }
+    }
+  }
+
+  .bar-value {
+    width: 45px;
+    font-size: 12px;
+    color: #f56c6c;
+    font-weight: 600;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .bar-count {
+    width: 36px;
+    font-size: 12px;
+    color: #909399;
+    text-align: right;
+    flex-shrink: 0;
   }
 }
 

@@ -1,6 +1,7 @@
 package com.instrument.service;
 
 import com.instrument.entity.AccessoryGroup;
+import com.instrument.vo.GroupHealthScoreVO;
 
 import java.util.List;
 
@@ -15,4 +16,8 @@ public interface AccessoryGroupService {
     boolean update(AccessoryGroup group);
 
     boolean remove(Long id);
+
+    GroupHealthScoreVO healthScore(Long groupId);
+
+    List<GroupHealthScoreVO> healthScores();
 }
