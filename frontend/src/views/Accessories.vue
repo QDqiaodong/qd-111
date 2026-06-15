@@ -192,8 +192,8 @@
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="标准更换周期(天)">
-                <el-input-number v-model="form.standardCycle" :min="1" :max="3650" style="width: 100%" />
+              <el-form-item label="标准更换周期(天)" prop="standardCycle">
+                <el-input-number v-model="form.standardCycle" :min="1" :max="3650" style="width: 100%" @change="handleStandardCycleChange" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -296,7 +296,12 @@
                     </div>
                   </div>
                   <div class="lifecycle-progress-info">
-                    已使用 {{ lifecycleData.usedDays }} 天 / 标准周期 {{ currentRow.standardCycle }} 天
+                    <template v-if="currentRow.standardCycle && currentRow.standardCycle > 0">
+                      已使用 {{ lifecycleData.usedDays }} 天 / 标准周期 {{ currentRow.standardCycle }} 天
+                    </template>
+                    <template v-else>
+                      已使用 {{ lifecycleData.usedDays }} 天 / <span style="color: #e6a23c">未设置标准周期，无法计算到期提醒</span>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -361,7 +366,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Timer, Operation } from '@element-plus/icons-vue'
@@ -407,6 +412,19 @@ const tableData = ref([])
 
 const dialogTitle = computed(() => dialogMode.value === 'add' ? '新增配件' : dialogMode.value === 'edit' ? '编辑配件' : '查看配件')
 
+const DEFAULT_STANDARD_CYCLE = 90
+
+const TYPE_CYCLE_DEFAULTS = {
+  string: 90,
+  bow: 365,
+  pick: 60,
+  rosin: 180,
+  capo: 730,
+  strap: 730,
+  cleaner: 180,
+  other: 90
+}
+
 const form = reactive({
   id: null,
   name: '',
@@ -415,7 +433,7 @@ const form = reactive({
   instrument: '',
   groupId: null,
   brandModel: '',
-  standardCycle: 90,
+  standardCycle: DEFAULT_STANDARD_CYCLE,
   purchaseDate: '',
   wornStatus: 'good',
   imageUrl: '',
@@ -428,6 +446,7 @@ const rules = {
   instrument: [{ required: true, message: '请选择适配乐器', trigger: 'change' }],
   groupId: [{ required: true, message: '请选择分组', trigger: 'change' }],
   specification: [{ required: true, message: '请输入规格描述', trigger: 'blur' }],
+  standardCycle: [{ required: true, message: '请输入标准更换周期', trigger: 'change' }],
   purchaseDate: [{ required: true, message: '请选择购入时间', trigger: 'change' }],
   wornStatus: [{ required: true, message: '请选择损耗状态', trigger: 'change' }]
 }
@@ -561,7 +580,7 @@ const resetForm = () => {
     instrument: '',
     groupId: null,
     brandModel: '',
-    standardCycle: 90,
+    standardCycle: DEFAULT_STANDARD_CYCLE,
     purchaseDate: dayjs().format('YYYY-MM-DD'),
     wornStatus: 'good',
     imageUrl: '',
@@ -576,6 +595,23 @@ const handleAdd = () => {
   form.purchaseDate = dayjs().format('YYYY-MM-DD')
   dialogVisible.value = true
 }
+
+const handleStandardCycleChange = (val) => {
+  if (val === undefined || val === null) {
+    const defaultCycle = TYPE_CYCLE_DEFAULTS[form.typeCode] || DEFAULT_STANDARD_CYCLE
+    form.standardCycle = defaultCycle
+    ElMessage.info(`标准周期已恢复为默认值 ${defaultCycle} 天`)
+  }
+}
+
+watch(() => form.typeCode, (newType, oldType) => {
+  if (newType && newType !== oldType && dialogMode.value === 'add') {
+    const defaultCycle = TYPE_CYCLE_DEFAULTS[newType]
+    if (defaultCycle) {
+      form.standardCycle = defaultCycle
+    }
+  }
+})
 
 const handleEdit = (row) => {
   dialogMode.value = 'edit'
@@ -619,7 +655,12 @@ const computeLifecycleLocal = (row) => {
     const sorted = [...replacementHistory.value].sort((a, b) => dayjs(b.replaceDate).valueOf() - dayjs(a.replaceDate).valueOf())
     lastReplaceDate = sorted[0].replaceDate
   }
-  const stage = determineStage(cyclePercent, row.wornStatus)
+  let stage
+  if (standardCycle <= 0) {
+    stage = determineStage(0, row.wornStatus)
+  } else {
+    stage = determineStage(cyclePercent, row.wornStatus)
+  }
   return {
     accessoryId: row.id,
     name: row.name,
@@ -631,7 +672,7 @@ const computeLifecycleLocal = (row) => {
     lastReplaceDate,
     wornStatus: row.wornStatus,
     stage,
-    stageLabel: getStageLabelByCode(stage)
+    stageLabel: standardCycle > 0 ? getStageLabelByCode(stage) : '未设置周期'
   }
 }
 
@@ -730,6 +771,9 @@ const handleBatchStatus = async (code) => {
 
 const handleSubmit = async () => {
   await formRef.value.validate()
+  if (!form.standardCycle || form.standardCycle <= 0) {
+    form.standardCycle = TYPE_CYCLE_DEFAULTS[form.typeCode] || DEFAULT_STANDARD_CYCLE
+  }
   submitting.value = true
   const originalForm = { ...form }
   try {

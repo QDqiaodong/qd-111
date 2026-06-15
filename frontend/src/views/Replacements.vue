@@ -219,19 +219,20 @@ const lastReplaceInfo = computed(() => {
   if (excludeId) {
     history = history.filter(h => h.id !== excludeId)
   }
-  if (history.length === 0) {
+  const formDate = dayjs(form.replaceDate)
+  const beforeCurrent = history.filter(h => dayjs(h.replaceDate).isBefore(formDate) || dayjs(h.replaceDate).isSame(formDate, 'day'))
+  if (beforeCurrent.length === 0) {
     const acc = accessoryList.value.find(a => a.id === form.accessoryId)
     if (acc && acc.purchaseDate) {
-      const days = dayjs(form.replaceDate).diff(dayjs(acc.purchaseDate), 'day')
+      const days = formDate.diff(dayjs(acc.purchaseDate), 'day')
       return `${acc.purchaseDate}（购入日期，距本次 ${Math.max(days, 0)} 天）`
     }
     return '首次登记'
   }
-  const last = history
+  const last = beforeCurrent
     .map(h => h.replaceDate)
     .sort((a, b) => dayjs(b).valueOf() - dayjs(a).valueOf())[0]
-  if (!last || dayjs(last).isAfter(dayjs(form.replaceDate))) return '首次登记或早于首次记录'
-  const days = dayjs(form.replaceDate).diff(dayjs(last), 'day')
+  const days = formDate.diff(dayjs(last), 'day')
   return `${last}（距本次 ${days} 天）`
 })
 

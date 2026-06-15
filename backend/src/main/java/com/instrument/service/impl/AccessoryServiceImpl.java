@@ -80,6 +80,9 @@ public class AccessoryServiceImpl implements AccessoryService {
         Accessory entity = new Accessory();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
+        if (entity.getStandardCycle() == null || entity.getStandardCycle() <= 0) {
+            entity.setStandardCycle(dictService.getStandardCycle(dto.getTypeCode()));
+        }
         return accessoryMapper.updateById(entity) > 0;
     }
 

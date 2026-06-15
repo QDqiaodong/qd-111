@@ -1,5 +1,6 @@
 package com.instrument.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -31,6 +32,8 @@ public class AccessoryDTO implements Serializable {
 
     private String brandModel;
 
+    @NotNull(message = "标准更换周期不能为空")
+    @Min(value = 1, message = "标准更换周期最小为1天")
     private Integer standardCycle;
 
     @NotNull(message = "购入时间不能为空")

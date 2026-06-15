@@ -105,7 +105,10 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
                     .filter(r -> !r.getId().equals(excludeId))
                     .toList();
         }
-        if (history.isEmpty()) {
+        List<ReplacementRecord> beforeCurrent = history.stream()
+                .filter(r -> r.getReplaceDate() != null && !r.getReplaceDate().isAfter(entity.getReplaceDate()))
+                .toList();
+        if (beforeCurrent.isEmpty()) {
             Accessory accessory = accessoryMapper.selectById(accessoryId);
             if (accessory != null && accessory.getPurchaseDate() != null) {
                 long days = ChronoUnit.DAYS.between(accessory.getPurchaseDate(), entity.getReplaceDate());
@@ -115,8 +118,8 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
             }
             return;
         }
-        history.sort(Comparator.comparing(ReplacementRecord::getReplaceDate).reversed());
-        ReplacementRecord last = history.get(0);
+        beforeCurrent.sort(Comparator.comparing(ReplacementRecord::getReplaceDate).reversed());
+        ReplacementRecord last = beforeCurrent.get(0);
         if (last != null && last.getReplaceDate() != null) {
             long days = ChronoUnit.DAYS.between(last.getReplaceDate(), entity.getReplaceDate());
             entity.setUsageDays((int) Math.max(days, 0));
