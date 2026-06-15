@@ -37,7 +37,7 @@ RUN npm config set registry https://registry.npmmirror.com \
 # ============================================================
 # Stage 3: 运行层（Nginx 镜像，仅拷贝 dist + 配置）
 # ============================================================
-FROM ${DOCKER_REGISTRY}/nginx:alpine AS runtime
+FROM ${DOCKER_REGISTRY}/nginx:1.27-alpine AS runtime
 
 # 5. 容器内 Nginx 统一监听 80，宿主机映射由 docker-compose 管理
 EXPOSE 80
