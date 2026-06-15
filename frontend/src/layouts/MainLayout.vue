@@ -30,6 +30,10 @@
           <el-icon><Warning /></el-icon>
           <template #title>损耗状态</template>
         </el-menu-item>
+        <el-menu-item index="/spec-comparison">
+          <el-icon><Grid /></el-icon>
+          <template #title>规格对照</template>
+        </el-menu-item>
         <el-menu-item index="/groups">
           <el-icon><Folder /></el-icon>
           <template #title>物资分组</template>

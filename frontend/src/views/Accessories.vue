@@ -3,6 +3,9 @@
     <div class="page-header">
       <h2 class="page-title">配件耗材建档</h2>
       <div class="table-toolbar">
+        <el-button @click="goToSpecPage">
+          <el-icon><Operation /></el-icon>规格对照
+        </el-button>
         <el-button type="primary" @click="handleAdd">
           <el-icon><Plus /></el-icon>新增配件
         </el-button>
@@ -346,18 +349,28 @@
           </div>
         </div>
       </template>
+
+      <template #footer>
+        <el-button @click="viewVisible = false">关闭</el-button>
+        <el-button type="primary" @click="goToSpecComparison">
+          <el-icon><Operation /></el-icon>查看规格对照
+        </el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Timer } from '@element-plus/icons-vue'
+import { Timer, Operation } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { accessoryApi, dictApi, groupApi, replacementApi } from '@/api'
 import { compressImage } from '@/utils/image'
 import BatchActionBar from '@/components/BatchActionBar.vue'
+
+const router = useRouter()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -778,6 +791,23 @@ const getWornLabel = (code) => {
 const getWornTagType = (code) => {
   const map = { good: 'success', slight: 'warning', severe: 'danger', broken: 'info' }
   return map[code] || 'info'
+}
+
+const goToSpecPage = () => {
+  router.push({ path: '/spec-comparison' })
+}
+
+const goToSpecComparison = () => {
+  if (!currentRow.value) return
+  viewVisible.value = false
+  router.push({
+    path: '/spec-comparison',
+    query: {
+      instrument: currentRow.value.instrument,
+      instrumentName: currentRow.value.instrumentName,
+      accessoryId: currentRow.value.id
+    }
+  })
 }
 
 onMounted(() => {
