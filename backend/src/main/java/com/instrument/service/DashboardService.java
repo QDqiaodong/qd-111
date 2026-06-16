@@ -14,5 +14,9 @@ public interface DashboardService {
 
     List<GroupDistributionVO> groupDistribution();
 
+    RiskTiersVO riskTiers();
+
+    List<RiskTierItemVO> riskTier(String tier);
+
     WornHeatmapVO wornHeatmap();
 }

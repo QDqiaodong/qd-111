@@ -139,6 +139,52 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     @Override
+    public RiskTiersVO riskTiers() {
+        List<RiskTierItemVO> items = buildRiskItems();
+
+        RiskTiersVO vo = new RiskTiersVO();
+        vo.setExpired(items.stream()
+                .filter(item -> item.getDaysLeft() != null && item.getDaysLeft() <= 0)
+                .sorted(Comparator.comparingInt(RiskTierItemVO::getDaysLeft))
+                .collect(Collectors.toList()));
+        vo.setBroken(items.stream()
+                .filter(item -> "broken".equals(item.getWornStatus()))
+                .sorted(riskItemComparator())
+                .collect(Collectors.toList()));
+        vo.setSevere(items.stream()
+                .filter(item -> "severe".equals(item.getWornStatus()))
+                .sorted(riskItemComparator())
+                .collect(Collectors.toList()));
+        vo.setUpcoming(items.stream()
+                .filter(item -> item.getDaysLeft() != null
+                        && item.getDaysLeft() > 0
+                        && item.getDaysLeft() <= 30
+                        && !"severe".equals(item.getWornStatus())
+                        && !"broken".equals(item.getWornStatus()))
+                .sorted(Comparator.comparingInt(RiskTierItemVO::getDaysLeft))
+                .collect(Collectors.toList()));
+        return vo;
+    }
+
+    @Override
+    public List<RiskTierItemVO> riskTier(String tier) {
+        RiskTiersVO tiers = riskTiers();
+        if ("expired".equals(tier)) {
+            return tiers.getExpired();
+        }
+        if ("broken".equals(tier)) {
+            return tiers.getBroken();
+        }
+        if ("severe".equals(tier)) {
+            return tiers.getSevere();
+        }
+        if ("upcoming".equals(tier)) {
+            return tiers.getUpcoming();
+        }
+        return Collections.emptyList();
+    }
+
+    @Override
     public WornHeatmapVO wornHeatmap() {
         List<DictVO> instruments = dictService.instruments();
         List<DictVO> accessoryTypes = dictService.accessoryTypes();
@@ -197,5 +243,53 @@ public class DashboardServiceImpl implements DashboardService {
         vo.setCells(cells);
 
         return vo;
+    }
+
+    private List<RiskTierItemVO> buildRiskItems() {
+        List<Accessory> accessories = accessoryMapper.selectList(null);
+        if (accessories.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<Long, List<ReplacementRecord>> historyMap = recordMapper.selectList(null).stream()
+                .filter(record -> record.getAccessoryId() != null)
+                .collect(Collectors.groupingBy(ReplacementRecord::getAccessoryId));
+
+        LocalDate today = LocalDate.now();
+        List<RiskTierItemVO> items = new ArrayList<>();
+        for (Accessory accessory : accessories) {
+            RiskTierItemVO item = new RiskTierItemVO();
+            item.setId(accessory.getId());
+            item.setAccessoryId(accessory.getId());
+            item.setName(accessory.getName());
+            item.setTypeCode(accessory.getTypeCode());
+            item.setTypeName(accessory.getTypeName());
+            item.setSpecification(accessory.getSpecification());
+            item.setInstrument(accessory.getInstrument());
+            item.setInstrumentName(accessory.getInstrumentName());
+            item.setWornStatus(accessory.getWornStatus());
+
+            LocalDate baselineDate = historyMap.getOrDefault(accessory.getId(), Collections.emptyList()).stream()
+                    .map(ReplacementRecord::getReplaceDate)
+                    .filter(Objects::nonNull)
+                    .max(LocalDate::compareTo)
+                    .orElse(accessory.getPurchaseDate());
+
+            if (baselineDate != null) {
+                int usageDays = (int) Math.max(ChronoUnit.DAYS.between(baselineDate, today), 0);
+                item.setUsageDays(usageDays);
+                if (accessory.getStandardCycle() != null && accessory.getStandardCycle() > 0) {
+                    item.setDaysLeft(accessory.getStandardCycle() - usageDays);
+                }
+            }
+            items.add(item);
+        }
+        return items;
+    }
+
+    private Comparator<RiskTierItemVO> riskItemComparator() {
+        return Comparator
+                .comparing((RiskTierItemVO item) -> item.getDaysLeft() == null ? Integer.MAX_VALUE : item.getDaysLeft())
+                .thenComparing(RiskTierItemVO::getUsageDays, Comparator.nullsLast(Comparator.reverseOrder()));
     }
 }

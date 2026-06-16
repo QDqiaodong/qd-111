@@ -5,6 +5,7 @@ import com.instrument.service.DashboardService;
 import com.instrument.vo.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,6 +36,16 @@ public class DashboardController {
     @GetMapping("/group-distribution")
     public Result<List<GroupDistributionVO>> groupDistribution() {
         return Result.success(dashboardService.groupDistribution());
+    }
+
+    @GetMapping("/risk-tiers")
+    public Result<RiskTiersVO> riskTiers() {
+        return Result.success(dashboardService.riskTiers());
+    }
+
+    @GetMapping("/risk-tier/{tier}")
+    public Result<List<RiskTierItemVO>> riskTier(@PathVariable String tier) {
+        return Result.success(dashboardService.riskTier(tier));
     }
 
     @GetMapping("/worn-heatmap")
