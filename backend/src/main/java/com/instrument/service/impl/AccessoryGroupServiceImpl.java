@@ -68,6 +68,12 @@ public class AccessoryGroupServiceImpl implements AccessoryGroupService {
     @Override
     @Transactional
     public boolean remove(Long id) {
+        long accessoryCount = accessoryMapper.selectCount(
+                new LambdaQueryWrapper<Accessory>().eq(Accessory::getGroupId, id)
+        );
+        if (accessoryCount > 0) {
+            throw new IllegalArgumentException("该分组下仍有 " + accessoryCount + " 个配件，请先移除或变更配件的分组后再删除");
+        }
         return groupMapper.deleteById(id) > 0;
     }
 

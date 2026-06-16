@@ -59,8 +59,8 @@ public class AccessoryController {
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
-        if (status == null) {
-            return Result.error("状态不能为空");
+        if (status == null || status.isBlank()) {
+            return Result.error(400, "状态不能为空");
         }
         return accessoryService.updateStatus(id, status) ? Result.success() : Result.error("更新失败");
     }
@@ -69,7 +69,7 @@ public class AccessoryController {
     public Result<Void> batchUpdateStatus(@RequestBody Map<String, Object> body) {
         Object idsObj = body.get("ids");
         String status = (String) body.get("status");
-        if (idsObj == null || status == null) {
+        if (idsObj == null || status == null || status.isBlank()) {
             return Result.error(400, "参数不完整：ids 和 status 不能为空");
         }
         if (!(idsObj instanceof List<?> rawIds)) {

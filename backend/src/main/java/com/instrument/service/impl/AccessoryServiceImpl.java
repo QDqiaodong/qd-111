@@ -26,6 +26,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -64,6 +65,7 @@ public class AccessoryServiceImpl implements AccessoryService {
     @Transactional
     @CacheEvict(value = "accessory", allEntries = true)
     public boolean add(AccessoryDTO dto) {
+        validateWornStatus(dto.getWornStatus());
         Accessory entity = new Accessory();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
@@ -77,6 +79,7 @@ public class AccessoryServiceImpl implements AccessoryService {
     @Transactional
     @CacheEvict(value = "accessory", allEntries = true)
     public boolean update(AccessoryDTO dto) {
+        validateWornStatus(dto.getWornStatus());
         Accessory entity = new Accessory();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
@@ -97,6 +100,7 @@ public class AccessoryServiceImpl implements AccessoryService {
     @Transactional
     @CacheEvict(value = "accessory", allEntries = true)
     public boolean updateStatus(Long id, String status) {
+        validateWornStatus(status);
         Accessory entity = new Accessory();
         entity.setId(id);
         entity.setWornStatus(status);
@@ -107,6 +111,7 @@ public class AccessoryServiceImpl implements AccessoryService {
     @Transactional
     @CacheEvict(value = "accessory", allEntries = true)
     public boolean batchUpdateStatus(List<Long> ids, String status) {
+        validateWornStatus(status);
         for (Long id : ids) {
             Accessory entity = new Accessory();
             entity.setId(id);
@@ -138,6 +143,18 @@ public class AccessoryServiceImpl implements AccessoryService {
             entity.setInstrumentName(dictService.getInstrumentLabel(entity.getInstrument()));
         }
         if (StringUtils.hasText(entity.getWornStatus())) {
+        }
+    }
+
+    private void validateWornStatus(String status) {
+        if (status == null) {
+            throw new IllegalArgumentException("损耗状态不能为空");
+        }
+        Set<String> validStatuses = dictService.wornStatuses().stream()
+                .map(d -> d.getCode())
+                .collect(Collectors.toSet());
+        if (!validStatuses.contains(status)) {
+            throw new IllegalArgumentException("无效的损耗状态: " + status + "，合法值为: " + validStatuses);
         }
     }
 
