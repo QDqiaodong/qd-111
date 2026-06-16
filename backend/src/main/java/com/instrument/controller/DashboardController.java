@@ -36,4 +36,9 @@ public class DashboardController {
     public Result<List<GroupDistributionVO>> groupDistribution() {
         return Result.success(dashboardService.groupDistribution());
     }
+
+    @GetMapping("/worn-heatmap")
+    public Result<WornHeatmapVO> wornHeatmap() {
+        return Result.success(dashboardService.wornHeatmap());
+    }
 }

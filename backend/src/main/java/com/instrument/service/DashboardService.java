@@ -13,4 +13,6 @@ public interface DashboardService {
     List<WornDistributionVO> wornDistribution();
 
     List<GroupDistributionVO> groupDistribution();
+
+    WornHeatmapVO wornHeatmap();
 }

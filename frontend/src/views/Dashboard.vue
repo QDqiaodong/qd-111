@@ -259,12 +259,28 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-row style="margin-top: 16px">
+      <el-col :span="24">
+        <el-card class="card-shadow" shadow="never">
+          <template #header>
+            <div class="card-header-title">
+              <el-icon color="#f56c6c"><DataAnalysis /></el-icon>
+              <span>损耗热区分布</span>
+              <span class="section-subtitle">按乐器×配件类型交叉呈现损耗状态</span>
+            </div>
+          </template>
+          <WornHeatmap :data="wornHeatmapData" :loading="heatmapLoading" />
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { dashboardApi } from '@/api'
+import WornHeatmap from '@/components/WornHeatmap.vue'
 
 const stats = reactive({
   totalAccessories: 0,
@@ -276,6 +292,8 @@ const stats = reactive({
 const upcomingList = ref([])
 const wornDist = ref([])
 const groupDist = ref([])
+const wornHeatmapData = ref({})
+const heatmapLoading = ref(false)
 
 const expiredList = ref([])
 const brokenList = ref([])
@@ -303,17 +321,23 @@ const upcomingGrouped = computed(() => groupByInstrument(upcomingRiskList.value)
 
 const loadData = async () => {
   try {
-    const [s, u, w, g, r] = await Promise.all([
+    heatmapLoading.value = true
+    const [s, u, w, g, r, h] = await Promise.all([
       dashboardApi.stats(),
       dashboardApi.upcomingReplacements(),
       dashboardApi.wornDistribution(),
       dashboardApi.groupDistribution(),
-      dashboardApi.riskTiers().catch(() => null)
+      dashboardApi.riskTiers().catch(() => null),
+      dashboardApi.wornHeatmap().catch(() => null)
     ])
     Object.assign(stats, s.data || s || {})
     upcomingList.value = u.data || u || []
     wornDist.value = w.data || w || []
     groupDist.value = g.data || g || []
+
+    if (h && h.data) {
+      wornHeatmapData.value = h.data
+    }
 
     if (r && (r.data || r)) {
       const riskData = r.data || r
@@ -326,6 +350,8 @@ const loadData = async () => {
     }
   } catch {
     loadMockData()
+  } finally {
+    heatmapLoading.value = false
   }
 }
 
@@ -377,6 +403,59 @@ const loadMockData = () => {
     { id: 402, name: '尤克里里琴弦', typeName: '琴弦', specification: '碳素弦 低张力', instrumentName: '尤克里里', usageDays: 80, daysLeft: 10, wornStatus: 'good' },
     { id: 403, name: '二胡松香', typeName: '松香', specification: '专业微尘型', instrumentName: '二胡', usageDays: 160, daysLeft: 20, wornStatus: 'slight' }
   ]
+
+  wornHeatmapData.value = {
+    instruments: [
+      { code: 'guitar-acoustic', label: '木吉他' },
+      { code: 'guitar-electric', label: '电吉他' },
+      { code: 'guitar-bass', label: '贝斯' },
+      { code: 'violin', label: '小提琴' },
+      { code: 'ukulele', label: '尤克里里' },
+      { code: 'erhu', label: '二胡' }
+    ],
+    accessoryTypes: [
+      { code: 'string', label: '琴弦' },
+      { code: 'bow', label: '琴弓' },
+      { code: 'pick', label: '拨片' },
+      { code: 'rosin', label: '松香' },
+      { code: 'capo', label: '变调夹' },
+      { code: 'strap', label: '背带' },
+      { code: 'cleaner', label: '清洁用品' }
+    ],
+    legends: [
+      { code: 'good', label: '完好', color: '#67c23a' },
+      { code: 'slight', label: '轻微磨损', color: '#e6a23c' },
+      { code: 'severe', label: '严重损耗', color: '#f56c6c' },
+      { code: 'broken', label: '已损坏', color: '#909399' }
+    ],
+    cells: [
+      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'string', typeName: '琴弦', total: 5, goodCount: 2, slightCount: 2, severeCount: 1, brokenCount: 0 },
+      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'pick', typeName: '拨片', total: 3, goodCount: 2, slightCount: 1, severeCount: 0, brokenCount: 0 },
+      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'capo', typeName: '变调夹', total: 2, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 1 },
+      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'strap', typeName: '背带', total: 2, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 1 },
+      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'cleaner', typeName: '清洁用品', total: 2, goodCount: 0, slightCount: 1, severeCount: 1, brokenCount: 0 },
+
+      { instrumentCode: 'guitar-electric', instrumentName: '电吉他', typeCode: 'string', typeName: '琴弦', total: 4, goodCount: 2, slightCount: 1, severeCount: 1, brokenCount: 0 },
+      { instrumentCode: 'guitar-electric', instrumentName: '电吉他', typeCode: 'pick', typeName: '拨片', total: 6, goodCount: 4, slightCount: 2, severeCount: 0, brokenCount: 0 },
+      { instrumentCode: 'guitar-electric', instrumentName: '电吉他', typeCode: 'capo', typeName: '变调夹', total: 1, goodCount: 0, slightCount: 0, severeCount: 0, brokenCount: 1 },
+      { instrumentCode: 'guitar-electric', instrumentName: '电吉他', typeCode: 'strap', typeName: '背带', total: 2, goodCount: 2, slightCount: 0, severeCount: 0, brokenCount: 0 },
+
+      { instrumentCode: 'guitar-bass', instrumentName: '贝斯', typeCode: 'string', typeName: '琴弦', total: 3, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 1 },
+      { instrumentCode: 'guitar-bass', instrumentName: '贝斯', typeCode: 'pick', typeName: '拨片', total: 2, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 0 },
+
+      { instrumentCode: 'violin', instrumentName: '小提琴', typeCode: 'string', typeName: '琴弦', total: 2, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 0 },
+      { instrumentCode: 'violin', instrumentName: '小提琴', typeCode: 'bow', typeName: '琴弓', total: 2, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 0 },
+      { instrumentCode: 'violin', instrumentName: '小提琴', typeCode: 'rosin', typeName: '松香', total: 3, goodCount: 1, slightCount: 1, severeCount: 1, brokenCount: 0 },
+      { instrumentCode: 'violin', instrumentName: '小提琴', typeCode: 'cleaner', typeName: '清洁用品', total: 1, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 0 },
+
+      { instrumentCode: 'ukulele', instrumentName: '尤克里里', typeCode: 'string', typeName: '琴弦', total: 2, goodCount: 2, slightCount: 0, severeCount: 0, brokenCount: 0 },
+      { instrumentCode: 'ukulele', instrumentName: '尤克里里', typeCode: 'pick', typeName: '拨片', total: 1, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 0 },
+
+      { instrumentCode: 'erhu', instrumentName: '二胡', typeCode: 'string', typeName: '琴弦', total: 1, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 0 },
+      { instrumentCode: 'erhu', instrumentName: '二胡', typeCode: 'bow', typeName: '琴弓', total: 1, goodCount: 0, slightCount: 1, severeCount: 0, brokenCount: 0 },
+      { instrumentCode: 'erhu', instrumentName: '二胡', typeCode: 'rosin', typeName: '松香', total: 2, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 0 }
+    ]
+  }
 }
 
 onMounted(loadData)
@@ -659,6 +738,22 @@ onMounted(loadData)
       color: #909399;
       flex-shrink: 0;
     }
+  }
+}
+
+.card-header-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+
+  .section-subtitle {
+    font-size: 12px;
+    font-weight: 400;
+    color: #909399;
+    margin-left: 8px;
   }
 }
 </style>

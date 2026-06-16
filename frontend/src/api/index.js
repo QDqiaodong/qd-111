@@ -47,5 +47,6 @@ export const dashboardApi = {
   wornDistribution: () => request.get('/dashboard/worn-distribution'),
   groupDistribution: () => request.get('/dashboard/group-distribution'),
   riskTierList: (tier) => request.get(`/dashboard/risk-tier/${tier}`),
-  riskTiers: () => request.get('/dashboard/risk-tiers')
+  riskTiers: () => request.get('/dashboard/risk-tiers'),
+  wornHeatmap: () => request.get('/dashboard/worn-heatmap')
 }

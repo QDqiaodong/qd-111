@@ -137,4 +137,65 @@ public class DashboardServiceImpl implements DashboardService {
             return vo;
         }).collect(Collectors.toList());
     }
+
+    @Override
+    public WornHeatmapVO wornHeatmap() {
+        List<DictVO> instruments = dictService.instruments();
+        List<DictVO> accessoryTypes = dictService.accessoryTypes();
+        List<DictVO> wornStatuses = dictService.wornStatuses();
+        List<Accessory> all = accessoryMapper.selectList(null);
+
+        WornHeatmapVO vo = new WornHeatmapVO();
+
+        vo.setInstruments(instruments.stream()
+                .map(d -> new WornHeatmapVO.InstrumentHeatmapVO(d.getCode(), d.getLabel()))
+                .collect(Collectors.toList()));
+
+        vo.setAccessoryTypes(accessoryTypes.stream()
+                .map(d -> new WornHeatmapVO.AccessoryTypeHeatmapVO(d.getCode(), d.getLabel()))
+                .collect(Collectors.toList()));
+
+        vo.setLegends(wornStatuses.stream()
+                .map(d -> new WornHeatmapVO.WornStatusLegendVO(
+                        d.getCode(), d.getLabel(), WORN_COLORS.getOrDefault(d.getCode(), "#909399")))
+                .collect(Collectors.toList()));
+
+        Map<String, Map<String, List<Accessory>>> grouped = all.stream()
+                .filter(a -> a.getInstrument() != null && a.getTypeCode() != null)
+                .collect(Collectors.groupingBy(
+                        Accessory::getInstrument,
+                        Collectors.groupingBy(Accessory::getTypeCode)
+                ));
+
+        List<WornHeatmapVO.HeatmapCellVO> cells = new ArrayList<>();
+        for (DictVO inst : instruments) {
+            for (DictVO type : accessoryTypes) {
+                WornHeatmapVO.HeatmapCellVO cell = new WornHeatmapVO.HeatmapCellVO();
+                cell.setInstrumentCode(inst.getCode());
+                cell.setInstrumentName(inst.getLabel());
+                cell.setTypeCode(type.getCode());
+                cell.setTypeName(type.getLabel());
+
+                List<Accessory> list = grouped.containsKey(inst.getCode())
+                        ? grouped.get(inst.getCode()).getOrDefault(type.getCode(), Collections.emptyList())
+                        : Collections.emptyList();
+
+                long goodCount = list.stream().filter(a -> "good".equals(a.getWornStatus())).count();
+                long slightCount = list.stream().filter(a -> "slight".equals(a.getWornStatus())).count();
+                long severeCount = list.stream().filter(a -> "severe".equals(a.getWornStatus())).count();
+                long brokenCount = list.stream().filter(a -> "broken".equals(a.getWornStatus())).count();
+
+                cell.setGoodCount(goodCount);
+                cell.setSlightCount(slightCount);
+                cell.setSevereCount(severeCount);
+                cell.setBrokenCount(brokenCount);
+                cell.setTotal(list.size());
+
+                cells.add(cell);
+            }
+        }
+        vo.setCells(cells);
+
+        return vo;
+    }
 }
