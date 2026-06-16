@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -66,11 +67,39 @@ public class AccessoryController {
 
     @PatchMapping("/batch-status")
     public Result<Void> batchUpdateStatus(@RequestBody Map<String, Object> body) {
-        @SuppressWarnings("unchecked")
-        List<Long> ids = (List<Long>) body.get("ids");
+        Object idsObj = body.get("ids");
         String status = (String) body.get("status");
-        if (ids == null || ids.isEmpty() || status == null) {
-            return Result.error("参数不完整");
+        if (idsObj == null || status == null) {
+            return Result.error(400, "参数不完整：ids 和 status 不能为空");
+        }
+        if (!(idsObj instanceof List<?> rawIds)) {
+            return Result.error(400, "参数格式错误：ids 必须是数组");
+        }
+        if (rawIds.isEmpty()) {
+            return Result.error(400, "请选择要操作的数据");
+        }
+        List<Long> ids = new ArrayList<>(rawIds.size());
+        for (int i = 0; i < rawIds.size(); i++) {
+            Object idObj = rawIds.get(i);
+            if (idObj == null) {
+                return Result.error(400, "参数错误：第 " + (i + 1) + " 个 ID 不能为空");
+            }
+            try {
+                Long id;
+                if (idObj instanceof Number number) {
+                    id = number.longValue();
+                } else if (idObj instanceof String str) {
+                    id = Long.parseLong(str.trim());
+                } else {
+                    return Result.error(400, "参数错误：第 " + (i + 1) + " 个 ID 类型不支持，仅支持数字或数字字符串");
+                }
+                if (id <= 0) {
+                    return Result.error(400, "参数错误：第 " + (i + 1) + " 个 ID 必须大于 0");
+                }
+                ids.add(id);
+            } catch (NumberFormatException e) {
+                return Result.error(400, "参数错误：第 " + (i + 1) + " 个 ID 不是有效的数字格式");
+            }
         }
         return accessoryService.batchUpdateStatus(ids, status) ? Result.success() : Result.error("更新失败");
     }

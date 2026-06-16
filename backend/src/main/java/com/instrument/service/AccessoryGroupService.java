@@ -11,7 +11,7 @@ public interface AccessoryGroupService {
 
     AccessoryGroup getById(Long id);
 
-    boolean add(AccessoryGroup group);
+    AccessoryGroup add(AccessoryGroup group);
 
     boolean update(AccessoryGroup group);
 

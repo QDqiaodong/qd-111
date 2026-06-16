@@ -51,11 +51,12 @@ public class AccessoryGroupServiceImpl implements AccessoryGroupService {
 
     @Override
     @Transactional
-    public boolean add(AccessoryGroup group) {
+    public AccessoryGroup add(AccessoryGroup group) {
         if (group.getSortOrder() == null) {
             group.setSortOrder(0);
         }
-        return groupMapper.insert(group) > 0;
+        int rows = groupMapper.insert(group);
+        return rows > 0 ? group : null;
     }
 
     @Override

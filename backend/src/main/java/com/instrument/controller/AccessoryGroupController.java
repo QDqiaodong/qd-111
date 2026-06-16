@@ -43,8 +43,9 @@ public class AccessoryGroupController {
     }
 
     @PostMapping
-    public Result<Void> add(@Valid @RequestBody AccessoryGroup group) {
-        return groupService.add(group) ? Result.success() : Result.error("新增失败");
+    public Result<AccessoryGroup> add(@Valid @RequestBody AccessoryGroup group) {
+        AccessoryGroup created = groupService.add(group);
+        return created != null ? Result.success(created) : Result.error("新增失败");
     }
 
     @PutMapping
