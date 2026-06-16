@@ -197,6 +197,66 @@
               </el-form-item>
             </el-col>
           </el-row>
+          <div v-if="cycleReferenceData || cycleReferenceLoading" class="cycle-reference-panel" v-loading="cycleReferenceLoading">
+            <div class="reference-panel-header">
+              <el-icon><InfoFilled /></el-icon>
+              <span>周期参考信息</span>
+            </div>
+            <template v-if="cycleReferenceData">
+              <div class="reference-grid">
+                <div class="reference-item">
+                  <div class="reference-label">标准周期</div>
+                  <div class="reference-value">
+                    <span class="value-main">{{ cycleReferenceData.standardCycle || '-' }} 天</span>
+                    <span class="value-sub">{{ cycleReferenceData.standardCycleLabel || '' }}</span>
+                  </div>
+                </div>
+                <div class="reference-item">
+                  <div class="reference-label">上次同类更换</div>
+                  <div class="reference-value">
+                    <template v-if="cycleReferenceData.lastInterval">
+                      <span class="value-main">{{ cycleReferenceData.lastInterval }} 天</span>
+                      <span class="value-sub">{{ cycleReferenceData.lastReplaceDate || '' }}</span>
+                    </template>
+                    <span v-else class="value-empty">暂无记录</span>
+                  </div>
+                </div>
+                <div class="reference-item">
+                  <div class="reference-label">历史平均</div>
+                  <div class="reference-value">
+                    <template v-if="cycleReferenceData.averageInterval">
+                      <span class="value-main">{{ cycleReferenceData.averageInterval }} 天</span>
+                      <span class="value-sub">共 {{ cycleReferenceData.historyCount || 0 }} 条记录</span>
+                    </template>
+                    <span v-else class="value-empty">暂无数据</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="cycleReferenceData.currentInputCycle > 0" class="diff-section">
+                <div class="diff-title">当前输入对比</div>
+                <div class="diff-grid">
+                  <div class="diff-item">
+                    <span class="diff-label">与标准周期：</span>
+                    <span :class="['diff-value', getDiffClass(cycleReferenceData.diffFromStandard)]">
+                      {{ cycleReferenceData.diffFromStandardLabel || '-' }}
+                    </span>
+                  </div>
+                  <div v-if="cycleReferenceData.lastInterval" class="diff-item">
+                    <span class="diff-label">与上次更换：</span>
+                    <span :class="['diff-value', getDiffClass(cycleReferenceData.diffFromLast)]">
+                      {{ cycleReferenceData.diffFromLastLabel || '-' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="cycleReferenceData.suggestion" class="suggestion-section">
+                <el-tag :type="getSuggestionTagType(cycleReferenceData.suggestionLevel)" effect="light" class="suggestion-tag">
+                  <el-icon><Warning /></el-icon>
+                  {{ cycleReferenceData.suggestion }}
+                </el-tag>
+              </div>
+            </template>
+          </div>
         </div>
 
         <div class="form-section">
@@ -366,10 +426,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Timer, Operation } from '@element-plus/icons-vue'
+import { Timer, Operation, InfoFilled, Warning } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { accessoryApi, dictApi, groupApi, replacementApi } from '@/api'
 import { compressImage } from '@/utils/image'
@@ -393,6 +453,8 @@ const instruments = ref([])
 const lifecycleLoading = ref(false)
 const lifecycleData = ref(null)
 const replacementHistory = ref([])
+const cycleReferenceLoading = ref(false)
+const cycleReferenceData = ref(null)
 
 const filters = reactive({
   keyword: '',
@@ -586,6 +648,7 @@ const resetForm = () => {
     imageUrl: '',
     remark: ''
   })
+  cycleReferenceData.value = null
   formRef.value?.resetFields()
 }
 
@@ -611,12 +674,60 @@ watch(() => form.typeCode, (newType, oldType) => {
       form.standardCycle = defaultCycle
     }
   }
+  loadCycleReference()
 })
+
+watch(() => form.instrument, () => {
+  loadCycleReference()
+})
+
+watch(() => form.standardCycle, () => {
+  loadCycleReference()
+})
+
+const loadCycleReference = async () => {
+  if (!form.typeCode || !form.instrument) {
+    cycleReferenceData.value = null
+    return
+  }
+  cycleReferenceLoading.value = true
+  try {
+    const res = await accessoryApi.getCycleReference({
+      typeCode: form.typeCode,
+      instrument: form.instrument,
+      currentCycle: form.standardCycle
+    })
+    if (res && res.data) {
+      cycleReferenceData.value = res.data
+    } else {
+      cycleReferenceData.value = null
+    }
+  } catch (e) {
+    cycleReferenceData.value = null
+  } finally {
+    cycleReferenceLoading.value = false
+  }
+}
+
+const getSuggestionTagType = (level) => {
+  const map = { success: 'success', warning: 'warning', danger: 'danger', info: 'info' }
+  return map[level] || 'info'
+}
+
+const getDiffClass = (diff) => {
+  if (diff === null || diff === undefined) return 'diff-neutral'
+  if (diff === 0) return 'diff-success'
+  if (Math.abs(diff) <= 10) return 'diff-warning'
+  return 'diff-danger'
+}
 
 const handleEdit = (row) => {
   dialogMode.value = 'edit'
   Object.assign(form, row)
   dialogVisible.value = true
+  nextTick(() => {
+    loadCycleReference()
+  })
 }
 
 const handleView = async (row) => {
@@ -1134,5 +1245,139 @@ onMounted(() => {
   justify-content: flex-end;
   padding: 16px 20px;
   border-top: 1px solid #ebeef5;
+}
+
+.cycle-reference-panel {
+  margin-top: 8px;
+  padding: 16px;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+
+  .reference-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #409eff;
+    margin-bottom: 12px;
+
+    .el-icon {
+      font-size: 16px;
+    }
+  }
+
+  .reference-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .reference-item {
+    background: #fff;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid #ebeef5;
+
+    .reference-label {
+      font-size: 12px;
+      color: #909399;
+      margin-bottom: 4px;
+    }
+
+    .reference-value {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+
+      .value-main {
+        font-size: 16px;
+        font-weight: 600;
+        color: #303133;
+      }
+
+      .value-sub {
+        font-size: 11px;
+        color: #909399;
+      }
+
+      .value-empty {
+        font-size: 12px;
+        color: #c0c4cc;
+      }
+    }
+  }
+
+  .diff-section {
+    background: #fff;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid #ebeef5;
+    margin-bottom: 12px;
+
+    .diff-title {
+      font-size: 12px;
+      color: #606266;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .diff-grid {
+      display: flex;
+      gap: 24px;
+    }
+
+    .diff-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+
+      .diff-label {
+        font-size: 12px;
+        color: #606266;
+      }
+
+      .diff-value {
+        font-size: 13px;
+        font-weight: 500;
+
+        &.diff-success {
+          color: #67c23a;
+        }
+
+        &.diff-warning {
+          color: #e6a23c;
+        }
+
+        &.diff-danger {
+          color: #f56c6c;
+        }
+
+        &.diff-neutral {
+          color: #909399;
+        }
+      }
+    }
+  }
+
+  .suggestion-section {
+    .suggestion-tag {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 12px;
+      font-size: 13px;
+      border-radius: 6px;
+      line-height: 1.5;
+
+      .el-icon {
+        font-size: 16px;
+        flex-shrink: 0;
+      }
+    }
+  }
 }
 </style>

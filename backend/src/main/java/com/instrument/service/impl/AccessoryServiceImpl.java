@@ -13,6 +13,7 @@ import com.instrument.mapper.ReplacementRecordMapper;
 import com.instrument.service.AccessoryService;
 import com.instrument.service.DictService;
 import com.instrument.vo.AccessoryLifecycleVO;
+import com.instrument.vo.CycleReferenceVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -257,6 +258,145 @@ public class AccessoryServiceImpl implements AccessoryService {
             case "expired": return "已超期";
             case "broken": return "已损坏";
             default: return "未知";
+        }
+    }
+
+    @Override
+    public CycleReferenceVO getCycleReference(String typeCode, String instrument, Integer currentCycle) {
+        CycleReferenceVO vo = new CycleReferenceVO();
+
+        Integer standardCycle = dictService.getStandardCycle(typeCode);
+        vo.setStandardCycle(standardCycle);
+        vo.setStandardCycleLabel(buildCycleLabel(standardCycle));
+
+        if (org.springframework.util.StringUtils.hasText(typeCode) && org.springframework.util.StringUtils.hasText(instrument)) {
+            LambdaQueryWrapper<Accessory> accessoryWrapper = new LambdaQueryWrapper<>();
+            accessoryWrapper.eq(Accessory::getTypeCode, typeCode);
+            accessoryWrapper.eq(Accessory::getInstrument, instrument);
+            List<Accessory> sameTypeAccessories = accessoryMapper.selectList(accessoryWrapper);
+
+            if (!sameTypeAccessories.isEmpty()) {
+                List<Long> accessoryIds = sameTypeAccessories.stream()
+                        .map(Accessory::getId)
+                        .collect(java.util.stream.Collectors.toList());
+
+                LambdaQueryWrapper<ReplacementRecord> recordWrapper = new LambdaQueryWrapper<>();
+                recordWrapper.in(ReplacementRecord::getAccessoryId, accessoryIds);
+                recordWrapper.isNotNull(ReplacementRecord::getUsageDays);
+                recordWrapper.gt(ReplacementRecord::getUsageDays, 0);
+                recordWrapper.orderByDesc(ReplacementRecord::getReplaceDate);
+                List<ReplacementRecord> records = replacementRecordMapper.selectList(recordWrapper);
+
+                vo.setHistoryCount(records.size());
+
+                if (!records.isEmpty()) {
+                    ReplacementRecord lastRecord = records.get(0);
+                    vo.setLastInterval(lastRecord.getUsageDays());
+                    vo.setLastReplaceDate(lastRecord.getReplaceDate());
+
+                    double avg = records.stream()
+                            .mapToInt(ReplacementRecord::getUsageDays)
+                            .average()
+                            .orElse(0);
+                    vo.setAverageInterval((int) Math.round(avg));
+                }
+            }
+        }
+
+        if (currentCycle != null && currentCycle > 0) {
+            vo.setCurrentInputCycle(currentCycle);
+
+            if (standardCycle != null && standardCycle > 0) {
+                int diff = currentCycle - standardCycle;
+                vo.setDiffFromStandard(diff);
+                vo.setDiffFromStandardLabel(buildDiffLabel(diff));
+            }
+
+            if (vo.getLastInterval() != null && vo.getLastInterval() > 0) {
+                int diff = currentCycle - vo.getLastInterval();
+                vo.setDiffFromLast(diff);
+                vo.setDiffFromLastLabel(buildDiffLabel(diff));
+            }
+        }
+
+        buildSuggestion(vo);
+
+        return vo;
+    }
+
+    private String buildCycleLabel(Integer days) {
+        if (days == null || days <= 0) return "未设置";
+        if (days >= 365) {
+            double years = days / 365.0;
+            return String.format("约%.1f年", years);
+        } else if (days >= 30) {
+            double months = days / 30.0;
+            return String.format("约%.1f个月", months);
+        } else {
+            return days + "天";
+        }
+    }
+
+    private String buildDiffLabel(int diff) {
+        if (diff == 0) return "一致";
+        if (diff > 0) return "多" + diff + "天";
+        return "少" + Math.abs(diff) + "天";
+    }
+
+    private void buildSuggestion(CycleReferenceVO vo) {
+        Integer standard = vo.getStandardCycle();
+        Integer current = vo.getCurrentInputCycle();
+        Integer last = vo.getLastInterval();
+        Integer avg = vo.getAverageInterval();
+
+        if (current == null || current <= 0) {
+            if (standard != null && standard > 0) {
+                vo.setSuggestion("建议使用标准周期 " + standard + " 天");
+                vo.setSuggestionLevel("info");
+            } else {
+                vo.setSuggestion("请输入合理的更换周期");
+                vo.setSuggestionLevel("warning");
+            }
+            return;
+        }
+
+        if (standard != null && standard > 0) {
+            double ratio = (double) current / standard;
+
+            if (ratio < 0.5) {
+                vo.setSuggestion("周期设置过短，会增加使用成本，请确认");
+                vo.setSuggestionLevel("warning");
+            } else if (ratio > 1.5) {
+                vo.setSuggestion("周期设置过长，可能影响使用效果，建议缩短");
+                vo.setSuggestionLevel("danger");
+            } else if (last != null && last > 0) {
+                double lastRatio = (double) current / last;
+                if (lastRatio < 0.7) {
+                    vo.setSuggestion("比上次同类更换间隔短很多，是使用习惯变了吗？");
+                    vo.setSuggestionLevel("warning");
+                } else if (lastRatio > 1.3) {
+                    vo.setSuggestion("比上次同类更换间隔长很多，请注意配件损耗情况");
+                    vo.setSuggestionLevel("warning");
+                } else {
+                    vo.setSuggestion("周期设置合理，与标准和历史数据相符");
+                    vo.setSuggestionLevel("success");
+                }
+            } else if (avg != null && avg > 0) {
+                double avgRatio = (double) current / avg;
+                if (avgRatio < 0.7 || avgRatio > 1.3) {
+                    vo.setSuggestion("与历史平均更换间隔差异较大，请确认");
+                    vo.setSuggestionLevel("warning");
+                } else {
+                    vo.setSuggestion("周期设置合理");
+                    vo.setSuggestionLevel("success");
+                }
+            } else {
+                vo.setSuggestion("周期在标准范围内，暂无历史数据对比");
+                vo.setSuggestionLevel("info");
+            }
+        } else {
+            vo.setSuggestion("无标准周期参考，请根据实际情况设置");
+            vo.setSuggestionLevel("info");
         }
     }
 }

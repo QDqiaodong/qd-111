@@ -33,4 +33,6 @@ public interface AccessoryService {
     AccessoryLifecycleVO getLifecycle(Long id);
 
     List<AccessoryLifecycleVO> listLifecycle(AccessoryQueryDTO query);
+
+    com.instrument.vo.CycleReferenceVO getCycleReference(String typeCode, String instrument, Integer currentCycle);
 }

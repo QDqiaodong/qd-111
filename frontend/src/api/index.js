@@ -10,7 +10,8 @@ export const accessoryApi = {
   updateStatus: (id, status) => request.patch(`/accessory/${id}/status`, { status }),
   batchUpdateStatus: (ids, status) => request.patch('/accessory/batch-status', { ids, status }),
   getLifecycle: (id) => request.get(`/accessory/${id}/lifecycle`),
-  listLifecycle: (params) => request.get('/accessory/lifecycle', { params })
+  listLifecycle: (params) => request.get('/accessory/lifecycle', { params }),
+  getCycleReference: (params) => request.get('/accessory/cycle-reference', { params })
 }
 
 export const replacementApi = {

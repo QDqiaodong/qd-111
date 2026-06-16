@@ -7,6 +7,7 @@ import com.instrument.dto.AccessoryQueryDTO;
 import com.instrument.entity.Accessory;
 import com.instrument.service.AccessoryService;
 import com.instrument.vo.AccessoryLifecycleVO;
+import com.instrument.vo.CycleReferenceVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +31,14 @@ public class AccessoryController {
     @GetMapping("/list")
     public Result<List<Accessory>> list(AccessoryQueryDTO query) {
         return Result.success(accessoryService.list(query));
+    }
+
+    @GetMapping("/cycle-reference")
+    public Result<CycleReferenceVO> getCycleReference(
+            @RequestParam(required = false) String typeCode,
+            @RequestParam(required = false) String instrument,
+            @RequestParam(required = false) Integer currentCycle) {
+        return Result.success(accessoryService.getCycleReference(typeCode, instrument, currentCycle));
     }
 
     @GetMapping("/{id}")
