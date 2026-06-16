@@ -11,6 +11,8 @@ import com.instrument.entity.ReplacementRecord;
 import com.instrument.mapper.AccessoryMapper;
 import com.instrument.mapper.ReplacementRecordMapper;
 import com.instrument.service.ReplacementRecordService;
+import com.instrument.vo.ReplacementTimelineItemVO;
+import com.instrument.vo.ReplacementTimelineVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -19,8 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -83,6 +88,77 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
     @Transactional
     public boolean remove(List<Long> ids) {
         return recordMapper.deleteBatchIds(ids) > 0;
+    }
+
+    @Override
+    public List<ReplacementTimelineVO> timeline(ReplacementQueryDTO query) {
+        List<ReplacementRecord> allRecords = list(query);
+        if (allRecords.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Map<Long, List<ReplacementRecord>> grouped = allRecords.stream()
+                .collect(Collectors.groupingBy(ReplacementRecord::getAccessoryId));
+
+        List<ReplacementTimelineVO> result = new ArrayList<>();
+        for (Map.Entry<Long, List<ReplacementRecord>> entry : grouped.entrySet()) {
+            Long accessoryId = entry.getKey();
+            List<ReplacementRecord> records = entry.getValue();
+
+            records.sort(Comparator.comparing(ReplacementRecord::getReplaceDate).reversed());
+
+            ReplacementTimelineVO vo = new ReplacementTimelineVO();
+            vo.setAccessoryId(accessoryId);
+            vo.setAccessoryName(records.get(0).getAccessoryName());
+            vo.setSpecification(records.get(0).getSpecification());
+            vo.setInstrumentName(records.get(0).getInstrumentName());
+            vo.setImageUrl(records.get(0).getImageUrl());
+            vo.setStandardCycle(records.get(0).getStandardCycle());
+            vo.setRecordCount(records.size());
+
+            List<ReplacementTimelineItemVO> items = new ArrayList<>();
+            int totalUsageDays = 0;
+
+            for (int i = 0; i < records.size(); i++) {
+                ReplacementRecord record = records.get(i);
+                ReplacementTimelineItemVO item = new ReplacementTimelineItemVO();
+                BeanUtils.copyProperties(record, item);
+
+                if (i < records.size() - 1) {
+                    ReplacementRecord nextRecord = records.get(i + 1);
+                    long interval = ChronoUnit.DAYS.between(nextRecord.getReplaceDate(), record.getReplaceDate());
+                    item.setIntervalDays((int) interval);
+                    item.setIntervalLabel("距上次 " + interval + " 天");
+                    item.setIsFirst(false);
+                } else {
+                    item.setIsFirst(true);
+                    item.setIntervalLabel("首次记录");
+                }
+
+                if (record.getUsageDays() != null) {
+                    totalUsageDays += record.getUsageDays();
+                }
+
+                items.add(item);
+            }
+
+            if (!records.isEmpty() && records.size() > 1) {
+                vo.setAvgUsageDays(totalUsageDays / records.size());
+            } else if (!records.isEmpty()) {
+                vo.setAvgUsageDays(records.get(0).getUsageDays());
+            }
+
+            vo.setItems(items);
+            result.add(vo);
+        }
+
+        result.sort((a, b) -> {
+            if (a.getItems() == null || a.getItems().isEmpty()) return 1;
+            if (b.getItems() == null || b.getItems().isEmpty()) return -1;
+            return b.getItems().get(0).getReplaceDate().compareTo(a.getItems().get(0).getReplaceDate());
+        });
+
+        return result;
     }
 
     private void fillAccessoryInfo(ReplacementRecord entity, Long accessoryId) {

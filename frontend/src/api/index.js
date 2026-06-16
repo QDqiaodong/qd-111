@@ -17,6 +17,7 @@ export const accessoryApi = {
 export const replacementApi = {
   page: (params) => request.get('/replacement/page', { params }),
   list: (params) => request.get('/replacement/list', { params }),
+  timeline: (params) => request.get('/replacement/timeline', { params }),
   getById: (id) => request.get(`/replacement/${id}`),
   add: (data) => request.post('/replacement', data),
   update: (data) => request.put('/replacement', data),

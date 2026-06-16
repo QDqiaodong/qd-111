@@ -3,6 +3,16 @@
     <div class="page-header">
       <h2 class="page-title">更换周期登记</h2>
       <div class="table-toolbar">
+        <el-radio-group v-model="viewMode" size="default" @change="handleViewModeChange">
+          <el-radio-button value="list">
+            <el-icon><List /></el-icon>
+            <span>列表视图</span>
+          </el-radio-button>
+          <el-radio-button value="timeline">
+            <el-icon><Clock /></el-icon>
+            <span>时间线视图</span>
+          </el-radio-button>
+        </el-radio-group>
         <el-button type="primary" @click="handleAdd">
           <el-icon><Plus /></el-icon>登记更换
         </el-button>
@@ -27,12 +37,13 @@
     </div>
 
     <BatchActionBar
+      v-if="viewMode === 'list'"
       :selected="selectedRows"
       @batch-delete="handleBatchDelete"
       @clear="clearSelection"
     />
 
-    <el-card class="card-shadow" shadow="never" body-style="padding: 0">
+    <el-card v-if="viewMode === 'list'" class="card-shadow" shadow="never" body-style="padding: 0">
       <el-table
         ref="tableRef"
         :data="tableData"
@@ -99,6 +110,101 @@
         />
       </div>
     </el-card>
+
+    <div v-else class="timeline-container" v-loading="loading">
+      <div v-if="timelineData.length === 0" class="empty-state">
+        <el-empty description="暂无更换记录" />
+      </div>
+      <div v-for="group in timelineData" :key="group.accessoryId" class="timeline-group">
+        <div class="timeline-group-header">
+          <div class="accessory-info">
+            <el-image
+              v-if="group.imageUrl"
+              :src="group.imageUrl"
+              fit="cover"
+              class="accessory-avatar"
+            />
+            <el-icon v-else :size="32" color="#c0c4cc" class="accessory-avatar-icon"><Goods /></el-icon>
+            <div class="accessory-detail">
+              <div class="accessory-title">{{ group.accessoryName }}</div>
+              <div class="accessory-meta">
+                <span class="meta-item">{{ group.specification }}</span>
+                <span class="meta-divider">·</span>
+                <span class="meta-item">{{ group.instrumentName }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="group-stats">
+            <div class="stat-item">
+              <span class="stat-value">{{ group.recordCount }}</span>
+              <span class="stat-label">更换次数</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ group.avgUsageDays || 0 }}天</span>
+              <span class="stat-label">平均使用</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ group.standardCycle }}天</span>
+              <span class="stat-label">标准周期</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="timeline-list">
+          <div
+            v-for="(item, index) in group.items"
+            :key="item.id"
+            class="timeline-item"
+            :class="{ 'is-first': item.isFirst }"
+          >
+            <div class="timeline-dot">
+              <div class="dot-inner"></div>
+            </div>
+            <div class="timeline-line" v-if="index < group.items.length - 1"></div>
+
+            <div class="timeline-content">
+              <div class="timeline-date-row">
+                <span class="timeline-date">{{ item.replaceDate }}</span>
+                <el-tag
+                  v-if="!item.isFirst"
+                  size="small"
+                  :type="getIntervalTagType(item.intervalDays, group.standardCycle)"
+                  class="interval-tag"
+                >
+                  {{ item.intervalLabel }}
+                </el-tag>
+                <el-tag v-else size="small" type="info" class="interval-tag">
+                  {{ item.intervalLabel }}
+                </el-tag>
+              </div>
+
+              <div class="timeline-detail-row">
+                <div class="detail-item">
+                  <span class="detail-label">使用天数</span>
+                  <el-tag size="small" :type="getUsageDaysTagType(item.usageDays, group.standardCycle)">
+                    {{ item.usageDays }}天
+                  </el-tag>
+                </div>
+                <div class="detail-item" v-if="item.operator">
+                  <span class="detail-label">操作人</span>
+                  <span class="detail-value">{{ item.operator }}</span>
+                </div>
+              </div>
+
+              <div v-if="item.remark" class="timeline-remark">
+                <el-icon class="remark-icon"><ChatDotRound /></el-icon>
+                <span class="remark-text">{{ item.remark }}</span>
+              </div>
+
+              <div class="timeline-actions">
+                <el-button type="primary" link size="small" @click="handleEditTimelineItem(item, group)">编辑</el-button>
+                <el-button type="danger" link size="small" @click="handleDeleteTimelineItem(item)">删除</el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <el-dialog
       v-model="dialogVisible"
@@ -171,6 +277,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { List, Clock, Plus, Goods, ChatDotRound } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { replacementApi, accessoryApi } from '@/api'
 import BatchActionBar from '@/components/BatchActionBar.vue'
@@ -184,6 +291,8 @@ const dialogMode = ref('add')
 const selectedRows = ref([])
 const accessoryList = ref([])
 const historyList = ref([])
+const viewMode = ref('list')
+const timelineData = ref([])
 
 const filters = reactive({
   keyword: '',
@@ -287,6 +396,90 @@ const loadList = async () => {
   }
 }
 
+const loadTimeline = async () => {
+  loading.value = true
+  try {
+    const params = {
+      keyword: filters.keyword,
+      accessoryId: filters.accessoryId
+    }
+    if (filters.dateRange && filters.dateRange.length === 2) {
+      params.startDate = filters.dateRange[0]
+      params.endDate = filters.dateRange[1]
+    }
+    const res = await replacementApi.timeline(params)
+    if (res && res.data) {
+      timelineData.value = res.data
+    } else {
+      loadMockTimeline()
+    }
+  } catch {
+    loadMockTimeline()
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadMockTimeline = () => {
+  const accessoriesMap = {}
+  accessoryList.value.forEach(a => { accessoriesMap[a.id] = a })
+  
+  const mockRecords = [
+    { id: 1, accessoryId: 1, replaceDate: '2026-04-15', standardCycle: 90, usageDays: 60, operator: '本人', remark: '音色变闷，及时更换' },
+    { id: 2, accessoryId: 2, replaceDate: '2026-05-10', standardCycle: 180, usageDays: 35, operator: '本人', remark: '' },
+    { id: 3, accessoryId: 3, replaceDate: '2026-05-25', standardCycle: 60, usageDays: 20, operator: '本人', remark: '丢了一个，换新的' },
+    { id: 4, accessoryId: 1, replaceDate: '2026-01-20', standardCycle: 90, usageDays: 85, operator: '本人', remark: '使用近三月' },
+    { id: 5, accessoryId: 6, replaceDate: '2026-03-01', standardCycle: 180, usageDays: 105, operator: '本人', remark: '深度保养使用' },
+    { id: 6, accessoryId: 1, replaceDate: '2025-10-15', standardCycle: 90, usageDays: 75, operator: '本人', remark: '常规更换' }
+  ]
+
+  const grouped = {}
+  mockRecords.forEach(r => {
+    if (!grouped[r.accessoryId]) {
+      const acc = accessoriesMap[r.accessoryId] || {}
+      grouped[r.accessoryId] = {
+        accessoryId: r.accessoryId,
+        accessoryName: acc.name || '',
+        specification: acc.specification || '',
+        instrumentName: acc.instrumentName || '',
+        imageUrl: acc.imageUrl || '',
+        standardCycle: r.standardCycle,
+        recordCount: 0,
+        avgUsageDays: 0,
+        items: []
+      }
+    }
+    grouped[r.accessoryId].items.push(r)
+  })
+
+  Object.values(grouped).forEach(group => {
+    group.items.sort((a, b) => dayjs(b.replaceDate).valueOf() - dayjs(a.replaceDate).valueOf())
+    group.recordCount = group.items.length
+    
+    let totalDays = 0
+    group.items.forEach((item, index) => {
+      if (index < group.items.length - 1) {
+        const interval = dayjs(item.replaceDate).diff(dayjs(group.items[index + 1].replaceDate), 'day')
+        item.intervalDays = interval
+        item.intervalLabel = `距上次 ${interval} 天`
+        item.isFirst = false
+      } else {
+        item.isFirst = true
+        item.intervalLabel = '首次记录'
+      }
+      if (item.usageDays) totalDays += item.usageDays
+    })
+    
+    group.avgUsageDays = Math.round(totalDays / group.items.length)
+  })
+
+  timelineData.value = Object.values(grouped).sort((a, b) => {
+    if (!a.items.length) return 1
+    if (!b.items.length) return -1
+    return dayjs(b.items[0].replaceDate).valueOf() - dayjs(a.items[0].replaceDate).valueOf()
+  })
+}
+
 const loadMockList = () => {
   const accessoriesMap = {}
   accessoryList.value.forEach(a => { accessoriesMap[a.id] = a })
@@ -302,7 +495,19 @@ const loadMockList = () => {
 
 const handleSearch = () => {
   pagination.pageNum = 1
-  loadList()
+  if (viewMode.value === 'list') {
+    loadList()
+  } else {
+    loadTimeline()
+  }
+}
+
+const handleViewModeChange = () => {
+  if (viewMode.value === 'list') {
+    loadList()
+  } else {
+    loadTimeline()
+  }
 }
 
 const handleSelectionChange = (rows) => {
@@ -343,6 +548,27 @@ const handleEdit = async (row) => {
   }
 }
 
+const handleEditTimelineItem = (item, group) => {
+  dialogMode.value = 'edit'
+  Object.assign(form, {
+    id: item.id,
+    accessoryId: group.accessoryId,
+    replaceDate: item.replaceDate,
+    operator: item.operator,
+    remark: item.remark
+  })
+  dialogVisible.value = true
+  if (form.accessoryId) {
+    replacementApi.history(form.accessoryId).then(res => {
+      historyList.value = res.data || res || []
+    }).catch(() => {})
+  }
+}
+
+const handleDeleteTimelineItem = (item) => {
+  handleDelete(item)
+}
+
 const handleAccessoryChange = async (id) => {
   const acc = accessoryList.value.find(a => a.id === id)
   if (acc) {
@@ -362,7 +588,7 @@ const handleDelete = (row) => {
     try {
       await replacementApi.remove([row.id])
       ElMessage.success('删除成功')
-      loadList()
+      refreshCurrentView()
     } catch (e) {
       if (e?.message !== 'cancel') {
         ElMessage.error(e?.message || '删除失败，请稍后重试')
@@ -390,6 +616,15 @@ const handleBatchDelete = (rows) => {
   }).catch(() => {})
 }
 
+const refreshCurrentView = () => {
+  if (viewMode.value === 'list') {
+    loadList()
+  } else {
+    loadTimeline()
+  }
+  loadHistory()
+}
+
 const handleSubmit = async () => {
   await formRef.value.validate()
   submitting.value = true
@@ -402,8 +637,7 @@ const handleSubmit = async () => {
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    loadList()
-    loadHistory()
+    refreshCurrentView()
   } catch (err) {
     if (err?.message === '校验不通过') {
       return
@@ -440,6 +674,22 @@ const getCycleColor = (row) => {
   return '#67c23a'
 }
 
+const getIntervalTagType = (intervalDays, standardCycle) => {
+  if (!standardCycle || !intervalDays) return 'info'
+  const ratio = intervalDays / standardCycle
+  if (ratio >= 1.2) return 'success'
+  if (ratio >= 0.8) return 'warning'
+  return 'danger'
+}
+
+const getUsageDaysTagType = (usageDays, standardCycle) => {
+  if (!standardCycle || !usageDays) return 'info'
+  const ratio = usageDays / standardCycle
+  if (ratio >= 1) return 'danger'
+  if (ratio >= 0.8) return 'warning'
+  return 'success'
+}
+
 onMounted(() => {
   loadAccessories().then(() => {
     loadHistory()
@@ -470,5 +720,245 @@ onMounted(() => {
   justify-content: flex-end;
   padding: 16px 20px;
   border-top: 1px solid #ebeef5;
+}
+
+.timeline-container {
+  .empty-state {
+    padding: 60px 0;
+  }
+
+  .timeline-group {
+    background: #fff;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+  }
+
+  .timeline-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+    border-bottom: 1px solid #ebeef5;
+
+    .accessory-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+
+      .accessory-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        flex-shrink: 0;
+      }
+
+      .accessory-avatar-icon {
+        width: 48px;
+        height: 48px;
+        padding: 8px;
+        background: #fff;
+        border-radius: 10px;
+        flex-shrink: 0;
+      }
+
+      .accessory-detail {
+        .accessory-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: #303133;
+          margin-bottom: 4px;
+        }
+        .accessory-meta {
+          font-size: 13px;
+          color: #909399;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+
+          .meta-divider {
+            color: #dcdfe6;
+          }
+        }
+      }
+    }
+
+    .group-stats {
+      display: flex;
+      gap: 32px;
+
+      .stat-item {
+        text-align: center;
+
+        .stat-value {
+          display: block;
+          font-size: 20px;
+          font-weight: 600;
+          color: #409eff;
+          margin-bottom: 2px;
+        }
+        .stat-label {
+          font-size: 12px;
+          color: #909399;
+        }
+      }
+    }
+  }
+
+  .timeline-list {
+    padding: 20px 24px 10px;
+    position: relative;
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-left: 32px;
+    padding-bottom: 24px;
+
+    &:last-child {
+      padding-bottom: 10px;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: 0;
+      top: 4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ecf5ff;
+      border: 2px solid #409eff;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      .dot-inner {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #409eff;
+      }
+    }
+
+    &.is-first .timeline-dot {
+      background: #f0f9eb;
+      border-color: #67c23a;
+
+      .dot-inner {
+        background: #67c23a;
+      }
+    }
+
+    .timeline-line {
+      position: absolute;
+      left: 7px;
+      top: 22px;
+      bottom: 0;
+      width: 2px;
+      background: #ebeef5;
+    }
+
+    .timeline-content {
+      background: #fafafa;
+      border-radius: 8px;
+      padding: 16px 18px;
+      border: 1px solid #ebeef5;
+      transition: all 0.2s;
+
+      &:hover {
+        background: #f5f7fa;
+        border-color: #dcdfe6;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      }
+
+      .timeline-date-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+
+        .timeline-date {
+          font-size: 15px;
+          font-weight: 600;
+          color: #303133;
+        }
+
+        .interval-tag {
+          flex-shrink: 0;
+        }
+      }
+
+      .timeline-detail-row {
+        display: flex;
+        gap: 24px;
+        margin-bottom: 10px;
+
+        .detail-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .detail-label {
+            font-size: 13px;
+            color: #909399;
+          }
+
+          .detail-value {
+            font-size: 13px;
+            color: #606266;
+            font-weight: 500;
+          }
+        }
+      }
+
+      .timeline-remark {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 8px 12px;
+        background: #fff;
+        border-radius: 6px;
+        border-left: 3px solid #409eff;
+        margin-bottom: 10px;
+
+        .remark-icon {
+          color: #409eff;
+          margin-top: 2px;
+          flex-shrink: 0;
+          font-size: 14px;
+        }
+
+        .remark-text {
+          font-size: 13px;
+          color: #606266;
+          line-height: 1.5;
+        }
+      }
+
+      .timeline-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        padding-top: 8px;
+        border-top: 1px dashed #ebeef5;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .timeline-group-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 16px;
+
+    .group-stats {
+      width: 100%;
+      justify-content: space-around;
+    }
+  }
 }
 </style>

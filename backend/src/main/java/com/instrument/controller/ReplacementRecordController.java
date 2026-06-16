@@ -6,6 +6,7 @@ import com.instrument.dto.ReplacementDTO;
 import com.instrument.dto.ReplacementQueryDTO;
 import com.instrument.entity.ReplacementRecord;
 import com.instrument.service.ReplacementRecordService;
+import com.instrument.vo.ReplacementTimelineVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -28,6 +29,11 @@ public class ReplacementRecordController {
     @GetMapping("/list")
     public Result<List<ReplacementRecord>> list(ReplacementQueryDTO query) {
         return Result.success(recordService.list(query));
+    }
+
+    @GetMapping("/timeline")
+    public Result<List<ReplacementTimelineVO>> timeline(ReplacementQueryDTO query) {
+        return Result.success(recordService.timeline(query));
     }
 
     @GetMapping("/history/{accessoryId}")
