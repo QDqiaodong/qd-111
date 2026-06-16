@@ -38,6 +38,10 @@
           <el-icon><Folder /></el-icon>
           <template #title>物资分组</template>
         </el-menu-item>
+        <el-menu-item index="/group-display">
+          <el-icon><Grid /></el-icon>
+          <template #title>陈列看板</template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>

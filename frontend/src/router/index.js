@@ -41,6 +41,12 @@ const routes = [
         name: 'SpecComparison',
         component: () => import('@/views/SpecComparison.vue'),
         meta: { title: '耗材规格对照' }
+      },
+      {
+        path: 'group-display',
+        name: 'GroupDisplay',
+        component: () => import('@/views/GroupDisplay.vue'),
+        meta: { title: '分组陈列看板' }
       }
     ]
   }
