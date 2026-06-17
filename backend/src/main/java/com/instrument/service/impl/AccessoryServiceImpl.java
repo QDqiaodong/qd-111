@@ -457,8 +457,9 @@ public class AccessoryServiceImpl implements AccessoryService {
                 LocalDate windowEnd = monthEnd.plusDays(1);
                 while (!expectedDate.isAfter(windowEnd)) {
                     if (!expectedDate.isBefore(windowStart) && !expectedDate.isAfter(monthEnd)) {
+                        LocalDate dayDate = expectedDate;
                         String dateKey = expectedDate.toString();
-                        com.instrument.vo.CalendarDayVO dayVO = dayMap.computeIfAbsent(dateKey, k -> createDayVO(expectedDate));
+                        com.instrument.vo.CalendarDayVO dayVO = dayMap.computeIfAbsent(dateKey, k -> createDayVO(dayDate));
                         dayVO.setHasExpected(true);
                         expectedCount++;
 
