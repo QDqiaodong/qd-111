@@ -7,11 +7,15 @@ import com.instrument.dto.AccessoryQueryDTO;
 import com.instrument.entity.Accessory;
 import com.instrument.service.AccessoryService;
 import com.instrument.vo.AccessoryLifecycleVO;
+import com.instrument.vo.CalendarDayVO;
+import com.instrument.vo.CalendarMonthVO;
 import com.instrument.vo.CycleReferenceVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -121,5 +125,18 @@ public class AccessoryController {
     @GetMapping("/lifecycle")
     public Result<List<AccessoryLifecycleVO>> listLifecycle(AccessoryQueryDTO query) {
         return Result.success(accessoryService.listLifecycle(query));
+    }
+
+    @GetMapping("/calendar/month")
+    public Result<CalendarMonthVO> getCalendarMonth(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month) {
+        return Result.success(accessoryService.getCalendarMonth(year, month));
+    }
+
+    @GetMapping("/calendar/day")
+    public Result<CalendarDayVO> getCalendarDay(
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+        return Result.success(accessoryService.getCalendarDay(date));
     }
 }

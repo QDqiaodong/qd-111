@@ -42,6 +42,10 @@
           <el-icon><Grid /></el-icon>
           <template #title>陈列看板</template>
         </el-menu-item>
+        <el-menu-item index="/replacement-calendar">
+          <el-icon><Calendar /></el-icon>
+          <template #title>更换日历</template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -74,6 +78,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { Calendar } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const collapse = ref(false)

@@ -24,10 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -398,5 +397,193 @@ public class AccessoryServiceImpl implements AccessoryService {
             vo.setSuggestion("无标准周期参考，请根据实际情况设置");
             vo.setSuggestionLevel("info");
         }
+    }
+
+    @Override
+    public com.instrument.vo.CalendarMonthVO getCalendarMonth(Integer year, Integer month) {
+        if (year == null || month == null) {
+            YearMonth now = YearMonth.now();
+            year = now.getYear();
+            month = now.getMonthValue();
+        }
+
+        YearMonth targetMonth = YearMonth.of(year, month);
+        LocalDate monthStart = targetMonth.atDay(1);
+        LocalDate monthEnd = targetMonth.atEndOfMonth();
+        LocalDate queryStart = monthStart.minusDays(60);
+        LocalDate queryEnd = monthEnd.plusDays(30);
+
+        LambdaQueryWrapper<Accessory> accessoryWrapper = new LambdaQueryWrapper<>();
+        List<Accessory> accessories = accessoryMapper.selectList(accessoryWrapper);
+
+        LambdaQueryWrapper<ReplacementRecord> recordWrapper = new LambdaQueryWrapper<>();
+        recordWrapper.between(ReplacementRecord::getReplaceDate, queryStart, queryEnd);
+        List<ReplacementRecord> records = replacementRecordMapper.selectList(recordWrapper);
+
+        Map<Long, List<ReplacementRecord>> recordMap = records.stream()
+                .collect(Collectors.groupingBy(ReplacementRecord::getAccessoryId));
+
+        Map<String, com.instrument.vo.CalendarDayVO> dayMap = new LinkedHashMap<>();
+        int expectedCount = 0;
+        int replacedCount = 0;
+        int severeCount = 0;
+
+        for (Accessory accessory : accessories) {
+            List<ReplacementRecord> accRecords = recordMap.getOrDefault(accessory.getId(), Collections.emptyList());
+            accRecords.sort(Comparator.comparing(ReplacementRecord::getReplaceDate));
+
+            LocalDate referenceDate = accessory.getPurchaseDate();
+            if (!accRecords.isEmpty()) {
+                referenceDate = accRecords.get(accRecords.size() - 1).getReplaceDate();
+            }
+
+            for (ReplacementRecord record : accRecords) {
+                LocalDate replaceDate = record.getReplaceDate();
+                if (!replaceDate.isBefore(monthStart) && !replaceDate.isAfter(monthEnd)) {
+                    String dateKey = replaceDate.toString();
+                    com.instrument.vo.CalendarDayVO dayVO = dayMap.computeIfAbsent(dateKey, k -> createDayVO(replaceDate));
+                    dayVO.setHasReplaced(true);
+                    replacedCount++;
+
+                    com.instrument.vo.CalendarAccessoryVO accVO = createAccessoryVO(accessory, "replaced", "已更换");
+                    dayVO.getAccessories().add(accVO);
+                }
+            }
+
+            if (referenceDate != null && accessory.getStandardCycle() != null && accessory.getStandardCycle() > 0) {
+                LocalDate expectedDate = referenceDate.plusDays(accessory.getStandardCycle());
+
+                LocalDate windowStart = monthStart.minusDays(1);
+                LocalDate windowEnd = monthEnd.plusDays(1);
+                while (!expectedDate.isAfter(windowEnd)) {
+                    if (!expectedDate.isBefore(windowStart) && !expectedDate.isAfter(monthEnd)) {
+                        String dateKey = expectedDate.toString();
+                        com.instrument.vo.CalendarDayVO dayVO = dayMap.computeIfAbsent(dateKey, k -> createDayVO(expectedDate));
+                        dayVO.setHasExpected(true);
+                        expectedCount++;
+
+                        com.instrument.vo.CalendarAccessoryVO accVO = createAccessoryVO(accessory, "expected", "预计到期");
+                        dayVO.getAccessories().add(accVO);
+                    }
+                    expectedDate = expectedDate.plusDays(accessory.getStandardCycle());
+                }
+            }
+
+            if ("severe".equals(accessory.getWornStatus()) || "broken".equals(accessory.getWornStatus())) {
+                LocalDate today = LocalDate.now();
+                if (!today.isBefore(monthStart) && !today.isAfter(monthEnd)) {
+                    String dateKey = today.toString();
+                    com.instrument.vo.CalendarDayVO dayVO = dayMap.computeIfAbsent(dateKey, k -> createDayVO(today));
+                    dayVO.setHasSevere(true);
+                    severeCount++;
+
+                    String status = "severe".equals(accessory.getWornStatus()) ? "severe" : "broken";
+                    String label = "severe".equals(accessory.getWornStatus()) ? "严重损耗" : "已损坏";
+                    com.instrument.vo.CalendarAccessoryVO accVO = createAccessoryVO(accessory, status, label);
+                    dayVO.getAccessories().add(accVO);
+                }
+            }
+        }
+
+        List<com.instrument.vo.CalendarDayVO> days = new ArrayList<>(dayMap.values());
+        days.sort(Comparator.comparing(com.instrument.vo.CalendarDayVO::getDate));
+
+        com.instrument.vo.CalendarMonthVO vo = new com.instrument.vo.CalendarMonthVO();
+        vo.setYear(year);
+        vo.setMonth(month);
+        vo.setDayMap(dayMap);
+        vo.setDays(days);
+        vo.setExpectedCount(expectedCount);
+        vo.setReplacedCount(replacedCount);
+        vo.setSevereCount(severeCount);
+
+        return vo;
+    }
+
+    @Override
+    public com.instrument.vo.CalendarDayVO getCalendarDay(LocalDate date) {
+        if (date == null) {
+            date = LocalDate.now();
+        }
+
+        LocalDate queryStart = date.minusDays(90);
+        LocalDate queryEnd = date.plusDays(30);
+
+        LambdaQueryWrapper<Accessory> accessoryWrapper = new LambdaQueryWrapper<>();
+        List<Accessory> accessories = accessoryMapper.selectList(accessoryWrapper);
+
+        LambdaQueryWrapper<ReplacementRecord> recordWrapper = new LambdaQueryWrapper<>();
+        recordWrapper.between(ReplacementRecord::getReplaceDate, queryStart, queryEnd);
+        List<ReplacementRecord> records = replacementRecordMapper.selectList(recordWrapper);
+
+        Map<Long, List<ReplacementRecord>> recordMap = records.stream()
+                .collect(Collectors.groupingBy(ReplacementRecord::getAccessoryId));
+
+        com.instrument.vo.CalendarDayVO dayVO = createDayVO(date);
+
+        for (Accessory accessory : accessories) {
+            List<ReplacementRecord> accRecords = recordMap.getOrDefault(accessory.getId(), Collections.emptyList());
+            accRecords.sort(Comparator.comparing(ReplacementRecord::getReplaceDate));
+
+            LocalDate referenceDate = accessory.getPurchaseDate();
+            if (!accRecords.isEmpty()) {
+                referenceDate = accRecords.get(accRecords.size() - 1).getReplaceDate();
+            }
+
+            for (ReplacementRecord record : accRecords) {
+                if (record.getReplaceDate().isEqual(date)) {
+                    dayVO.setHasReplaced(true);
+                    com.instrument.vo.CalendarAccessoryVO accVO = createAccessoryVO(accessory, "replaced", "已更换");
+                    dayVO.getAccessories().add(accVO);
+                }
+            }
+
+            if (referenceDate != null && accessory.getStandardCycle() != null && accessory.getStandardCycle() > 0) {
+                LocalDate expectedDate = referenceDate.plusDays(accessory.getStandardCycle());
+                while (!expectedDate.isAfter(date)) {
+                    if (expectedDate.isEqual(date)) {
+                        dayVO.setHasExpected(true);
+                        com.instrument.vo.CalendarAccessoryVO accVO = createAccessoryVO(accessory, "expected", "预计到期");
+                        dayVO.getAccessories().add(accVO);
+                        break;
+                    }
+                    expectedDate = expectedDate.plusDays(accessory.getStandardCycle());
+                }
+            }
+
+            if ("severe".equals(accessory.getWornStatus()) || "broken".equals(accessory.getWornStatus())) {
+                LocalDate today = LocalDate.now();
+                if (date.isEqual(today)) {
+                    dayVO.setHasSevere(true);
+                    String status = "severe".equals(accessory.getWornStatus()) ? "severe" : "broken";
+                    String label = "severe".equals(accessory.getWornStatus()) ? "严重损耗" : "已损坏";
+                    com.instrument.vo.CalendarAccessoryVO accVO = createAccessoryVO(accessory, status, label);
+                    dayVO.getAccessories().add(accVO);
+                }
+            }
+        }
+
+        return dayVO;
+    }
+
+    private com.instrument.vo.CalendarDayVO createDayVO(LocalDate date) {
+        com.instrument.vo.CalendarDayVO vo = new com.instrument.vo.CalendarDayVO();
+        vo.setDate(date);
+        vo.setAccessories(new ArrayList<>());
+        vo.setHasExpected(false);
+        vo.setHasReplaced(false);
+        vo.setHasSevere(false);
+        return vo;
+    }
+
+    private com.instrument.vo.CalendarAccessoryVO createAccessoryVO(Accessory accessory, String status, String statusLabel) {
+        com.instrument.vo.CalendarAccessoryVO vo = new com.instrument.vo.CalendarAccessoryVO();
+        vo.setAccessoryId(accessory.getId());
+        vo.setName(accessory.getName());
+        vo.setSpecification(accessory.getSpecification());
+        vo.setInstrumentName(accessory.getInstrumentName());
+        vo.setStatus(status);
+        vo.setStatusLabel(statusLabel);
+        return vo;
     }
 }

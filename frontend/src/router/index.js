@@ -47,6 +47,12 @@ const routes = [
         name: 'GroupDisplay',
         component: () => import('@/views/GroupDisplay.vue'),
         meta: { title: '分组陈列看板' }
+      },
+      {
+        path: 'replacement-calendar',
+        name: 'ReplacementCalendar',
+        component: () => import('@/views/ReplacementCalendar.vue'),
+        meta: { title: '更换节奏日历' }
       }
     ]
   }

@@ -6,6 +6,7 @@ import com.instrument.dto.AccessoryQueryDTO;
 import com.instrument.entity.Accessory;
 import com.instrument.vo.AccessoryLifecycleVO;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface AccessoryService {
@@ -35,4 +36,8 @@ public interface AccessoryService {
     List<AccessoryLifecycleVO> listLifecycle(AccessoryQueryDTO query);
 
     com.instrument.vo.CycleReferenceVO getCycleReference(String typeCode, String instrument, Integer currentCycle);
+
+    com.instrument.vo.CalendarMonthVO getCalendarMonth(Integer year, Integer month);
+
+    com.instrument.vo.CalendarDayVO getCalendarDay(LocalDate date);
 }

@@ -11,7 +11,9 @@ export const accessoryApi = {
   batchUpdateStatus: (ids, status) => request.patch('/accessory/batch-status', { ids, status }),
   getLifecycle: (id) => request.get(`/accessory/${id}/lifecycle`),
   listLifecycle: (params) => request.get('/accessory/lifecycle', { params }),
-  getCycleReference: (params) => request.get('/accessory/cycle-reference', { params })
+  getCycleReference: (params) => request.get('/accessory/cycle-reference', { params }),
+  getCalendarMonth: (params) => request.get('/accessory/calendar/month', { params }),
+  getCalendarDay: (params) => request.get('/accessory/calendar/day', { params })
 }
 
 export const replacementApi = {
