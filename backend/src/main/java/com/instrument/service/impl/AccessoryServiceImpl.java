@@ -72,10 +72,11 @@ public class AccessoryServiceImpl implements AccessoryService {
     @CacheEvict(value = "accessory", allEntries = true)
     public boolean add(AccessoryDTO dto) {
         validateWornStatus(dto.getWornStatus());
+        validateStandardCycle(dto.getStandardCycle());
         Accessory entity = new Accessory();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
-        if (entity.getStandardCycle() == null || entity.getStandardCycle() <= 0) {
+        if (entity.getStandardCycle() == null) {
             Integer matchedCycle = cycleRuleService.getMatchedCycle(dto.getTypeCode(), dto.getInstrument(), dto.getSpecification());
             entity.setStandardCycle(matchedCycle);
         }
@@ -87,10 +88,11 @@ public class AccessoryServiceImpl implements AccessoryService {
     @CacheEvict(value = "accessory", allEntries = true)
     public boolean update(AccessoryDTO dto) {
         validateWornStatus(dto.getWornStatus());
+        validateStandardCycle(dto.getStandardCycle());
         Accessory entity = new Accessory();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
-        if (entity.getStandardCycle() == null || entity.getStandardCycle() <= 0) {
+        if (entity.getStandardCycle() == null) {
             Integer matchedCycle = cycleRuleService.getMatchedCycle(dto.getTypeCode(), dto.getInstrument(), dto.getSpecification());
             entity.setStandardCycle(matchedCycle);
         }
@@ -163,6 +165,12 @@ public class AccessoryServiceImpl implements AccessoryService {
                 .collect(Collectors.toSet());
         if (!validStatuses.contains(status)) {
             throw new IllegalArgumentException("无效的损耗状态: " + status + "，合法值为: " + validStatuses);
+        }
+    }
+
+    private void validateStandardCycle(Integer cycle) {
+        if (cycle != null && cycle <= 0) {
+            throw new IllegalArgumentException("标准更换周期必须大于0，当前值: " + cycle);
         }
     }
 

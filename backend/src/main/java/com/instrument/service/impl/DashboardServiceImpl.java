@@ -142,27 +142,42 @@ public class DashboardServiceImpl implements DashboardService {
     public RiskTiersVO riskTiers() {
         List<RiskTierItemVO> items = buildRiskItems();
 
+        Set<Long> classifiedIds = new HashSet<>();
+
         RiskTiersVO vo = new RiskTiersVO();
-        vo.setExpired(items.stream()
-                .filter(item -> item.getDaysLeft() != null && item.getDaysLeft() <= 0)
-                .sorted(Comparator.comparingInt(RiskTierItemVO::getDaysLeft))
-                .collect(Collectors.toList()));
-        vo.setBroken(items.stream()
+
+        List<RiskTierItemVO> broken = items.stream()
                 .filter(item -> "broken".equals(item.getWornStatus()))
                 .sorted(riskItemComparator())
-                .collect(Collectors.toList()));
-        vo.setSevere(items.stream()
-                .filter(item -> "severe".equals(item.getWornStatus()))
+                .collect(Collectors.toList());
+        broken.forEach(item -> classifiedIds.add(item.getAccessoryId()));
+        vo.setBroken(broken);
+
+        List<RiskTierItemVO> severe = items.stream()
+                .filter(item -> "severe".equals(item.getWornStatus())
+                        && !classifiedIds.contains(item.getAccessoryId()))
                 .sorted(riskItemComparator())
-                .collect(Collectors.toList()));
-        vo.setUpcoming(items.stream()
+                .collect(Collectors.toList());
+        severe.forEach(item -> classifiedIds.add(item.getAccessoryId()));
+        vo.setSevere(severe);
+
+        List<RiskTierItemVO> expired = items.stream()
+                .filter(item -> item.getDaysLeft() != null && item.getDaysLeft() <= 0
+                        && !classifiedIds.contains(item.getAccessoryId()))
+                .sorted(Comparator.comparingInt(RiskTierItemVO::getDaysLeft))
+                .collect(Collectors.toList());
+        expired.forEach(item -> classifiedIds.add(item.getAccessoryId()));
+        vo.setExpired(expired);
+
+        List<RiskTierItemVO> upcoming = items.stream()
                 .filter(item -> item.getDaysLeft() != null
                         && item.getDaysLeft() > 0
                         && item.getDaysLeft() <= 30
-                        && !"severe".equals(item.getWornStatus())
-                        && !"broken".equals(item.getWornStatus()))
+                        && !classifiedIds.contains(item.getAccessoryId()))
                 .sorted(Comparator.comparingInt(RiskTierItemVO::getDaysLeft))
-                .collect(Collectors.toList()));
+                .collect(Collectors.toList());
+        vo.setUpcoming(upcoming);
+
         return vo;
     }
 

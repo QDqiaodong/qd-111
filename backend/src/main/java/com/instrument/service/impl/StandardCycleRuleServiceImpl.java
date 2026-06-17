@@ -63,6 +63,7 @@ public class StandardCycleRuleServiceImpl implements StandardCycleRuleService {
     @Transactional
     @CacheEvict(value = "cycleRule", allEntries = true)
     public boolean add(StandardCycleRuleDTO dto) {
+        validateStandardCycle(dto.getStandardCycle());
         StandardCycleRule entity = new StandardCycleRule();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
@@ -79,6 +80,7 @@ public class StandardCycleRuleServiceImpl implements StandardCycleRuleService {
     @Transactional
     @CacheEvict(value = "cycleRule", allEntries = true)
     public boolean update(StandardCycleRuleDTO dto) {
+        validateStandardCycle(dto.getStandardCycle());
         StandardCycleRule entity = new StandardCycleRule();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
@@ -239,6 +241,12 @@ public class StandardCycleRuleServiceImpl implements StandardCycleRuleService {
             entity.setInstrumentName(dictService.getInstrumentLabel(entity.getInstrument()));
         } else {
             entity.setInstrumentName("通用");
+        }
+    }
+
+    private void validateStandardCycle(Integer cycle) {
+        if (cycle == null || cycle <= 0) {
+            throw new IllegalArgumentException("标准更换周期必须大于0，当前值: " + cycle);
         }
     }
 
