@@ -19,4 +19,6 @@ public interface DashboardService {
     List<RiskTierItemVO> riskTier(String tier);
 
     WornHeatmapVO wornHeatmap();
+
+    List<RiskDistributionVO> riskDistribution();
 }

@@ -8,6 +8,7 @@ import com.instrument.mapper.AccessoryGroupMapper;
 import com.instrument.mapper.ReplacementRecordMapper;
 import com.instrument.service.DashboardService;
 import com.instrument.service.DictService;
+import com.instrument.util.RiskLevelCalculator;
 import com.instrument.vo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +57,18 @@ public class DashboardServiceImpl implements DashboardService {
                         .le(ReplacementRecord::getReplaceDate, end)
         ));
         vo.setGroupCount(groupMapper.selectCount(null));
+
+        List<RiskDistributionVO> dist = riskDistribution();
+        vo.setRiskDistribution(dist);
+        for (RiskDistributionVO d : dist) {
+            switch (d.getRiskLevel()) {
+                case RiskLevelCalculator.RISK_EXTREME: vo.setExtremeRiskCount(d.getCount()); break;
+                case RiskLevelCalculator.RISK_CRITICAL: vo.setCriticalRiskCount(d.getCount()); break;
+                case RiskLevelCalculator.RISK_HIGH: vo.setHighRiskCount(d.getCount()); break;
+                case RiskLevelCalculator.RISK_MEDIUM: vo.setMediumRiskCount(d.getCount()); break;
+                case RiskLevelCalculator.RISK_LOW: vo.setLowRiskCount(d.getCount()); break;
+            }
+        }
         return vo;
     }
 
@@ -270,7 +283,6 @@ public class DashboardServiceImpl implements DashboardService {
                 .filter(record -> record.getAccessoryId() != null)
                 .collect(Collectors.groupingBy(ReplacementRecord::getAccessoryId));
 
-        LocalDate today = LocalDate.now();
         List<RiskTierItemVO> items = new ArrayList<>();
         for (Accessory accessory : accessories) {
             RiskTierItemVO item = new RiskTierItemVO();
@@ -284,27 +296,56 @@ public class DashboardServiceImpl implements DashboardService {
             item.setInstrumentName(accessory.getInstrumentName());
             item.setWornStatus(accessory.getWornStatus());
 
-            LocalDate baselineDate = historyMap.getOrDefault(accessory.getId(), Collections.emptyList()).stream()
-                    .map(ReplacementRecord::getReplaceDate)
-                    .filter(Objects::nonNull)
-                    .max(LocalDate::compareTo)
-                    .orElse(accessory.getPurchaseDate());
+            List<ReplacementRecord> history = historyMap.getOrDefault(accessory.getId(), Collections.emptyList());
+            RiskLevelCalculator.RiskResult riskResult = RiskLevelCalculator.calculate(accessory, history);
 
-            if (baselineDate != null) {
-                int usageDays = (int) Math.max(ChronoUnit.DAYS.between(baselineDate, today), 0);
-                item.setUsageDays(usageDays);
-                if (accessory.getStandardCycle() != null && accessory.getStandardCycle() > 0) {
-                    item.setDaysLeft(accessory.getStandardCycle() - usageDays);
-                }
-            }
+            item.setUsageDays(riskResult.getUsageDays());
+            item.setDaysLeft(riskResult.getDaysLeft());
+            item.setCyclePercent(riskResult.getCyclePercent());
+            item.setRiskLevel(riskResult.getRiskLevel());
+            item.setRiskLabel(riskResult.getRiskLabel());
+            item.setRiskColor(riskResult.getRiskColor());
+            item.setRiskScore(riskResult.getRiskScore());
+
             items.add(item);
         }
         return items;
     }
 
+    @Override
+    public List<RiskDistributionVO> riskDistribution() {
+        List<RiskTierItemVO> items = buildRiskItems();
+        long total = items.size();
+
+        Map<String, Long> countMap = items.stream()
+                .collect(Collectors.groupingBy(
+                        RiskTierItemVO::getRiskLevel,
+                        Collectors.counting()
+                ));
+
+        List<String> orderedLevels = RiskLevelCalculator.getAllRiskLevels();
+        Map<String, String> labelMap = RiskLevelCalculator.getAllRiskLabels();
+        Map<String, String> colorMap = RiskLevelCalculator.getAllRiskColors();
+
+        List<RiskDistributionVO> result = new ArrayList<>();
+        for (String level : orderedLevels) {
+            RiskDistributionVO vo = new RiskDistributionVO();
+            vo.setRiskLevel(level);
+            vo.setRiskLabel(labelMap.get(level));
+            vo.setRiskColor(colorMap.get(level));
+            long count = countMap.getOrDefault(level, 0L);
+            vo.setCount(count);
+            vo.setPercent(total == 0 ? 0 : BigDecimal.valueOf(count * 100.0 / total)
+                    .setScale(0, RoundingMode.HALF_UP).intValue());
+            result.add(vo);
+        }
+        return result;
+    }
+
     private Comparator<RiskTierItemVO> riskItemComparator() {
         return Comparator
-                .comparing((RiskTierItemVO item) -> item.getDaysLeft() == null ? Integer.MAX_VALUE : item.getDaysLeft())
+                .comparing(RiskTierItemVO::getRiskScore, Comparator.reverseOrder())
+                .thenComparing((RiskTierItemVO item) -> item.getDaysLeft() == null ? Integer.MAX_VALUE : item.getDaysLeft())
                 .thenComparing(RiskTierItemVO::getUsageDays, Comparator.nullsLast(Comparator.reverseOrder()));
     }
 }

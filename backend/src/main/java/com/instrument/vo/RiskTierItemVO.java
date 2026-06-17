@@ -19,4 +19,10 @@ public class RiskTierItemVO implements Serializable {
     private String wornStatus;
     private Integer usageDays;
     private Integer daysLeft;
+
+    private String riskLevel;
+    private String riskLabel;
+    private String riskColor;
+    private Integer riskScore;
+    private Integer cyclePercent;
 }

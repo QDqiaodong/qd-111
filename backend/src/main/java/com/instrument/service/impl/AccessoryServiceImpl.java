@@ -14,6 +14,7 @@ import com.instrument.service.AccessoryCompatibilityService;
 import com.instrument.service.AccessoryService;
 import com.instrument.service.DictService;
 import com.instrument.service.StandardCycleRuleService;
+import com.instrument.util.RiskLevelCalculator;
 import com.instrument.vo.AccessoryCompatibilityVO;
 import com.instrument.vo.AccessoryLifecycleVO;
 import com.instrument.vo.CycleReferenceVO;
@@ -218,34 +219,31 @@ public class AccessoryServiceImpl implements AccessoryService {
         vo.setStandardCycle(accessory.getStandardCycle());
         vo.setWornStatus(accessory.getWornStatus());
 
-        LocalDate referenceDate = getLastReplaceDate(accessory.getId());
+        List<ReplacementRecord> history = getReplacementHistory(accessory.getId());
+        LocalDate referenceDate = history.isEmpty() ? null : history.get(0).getReplaceDate();
         vo.setLastReplaceDate(referenceDate);
 
-        if (referenceDate == null && accessory.getPurchaseDate() != null) {
-            referenceDate = accessory.getPurchaseDate();
-        }
+        RiskLevelCalculator.RiskResult riskResult = RiskLevelCalculator.calculate(accessory, history);
+        vo.setUsedDays(riskResult.getUsageDays() != null ? riskResult.getUsageDays() : 0);
+        vo.setCyclePercent(riskResult.getCyclePercent() != null ? riskResult.getCyclePercent() : 0);
+        vo.setDaysLeft(riskResult.getDaysLeft() != null ? Math.max(riskResult.getDaysLeft(), 0) : 0);
 
-        if (referenceDate != null) {
-            int usedDays = (int) ChronoUnit.DAYS.between(referenceDate, LocalDate.now());
-            vo.setUsedDays(Math.max(usedDays, 0));
-        } else {
-            vo.setUsedDays(0);
-        }
-
-        if (accessory.getStandardCycle() != null && accessory.getStandardCycle() > 0) {
-            int pct = Math.round((float) vo.getUsedDays() / accessory.getStandardCycle() * 100);
-            vo.setCyclePercent(Math.min(pct, 100));
-            int daysLeft = accessory.getStandardCycle() - vo.getUsedDays();
-            vo.setDaysLeft(Math.max(daysLeft, 0));
-        } else {
-            vo.setCyclePercent(0);
-            vo.setDaysLeft(0);
-        }
+        vo.setRiskLevel(riskResult.getRiskLevel());
+        vo.setRiskLabel(riskResult.getRiskLabel());
+        vo.setRiskColor(riskResult.getRiskColor());
+        vo.setRiskScore(riskResult.getRiskScore());
 
         String stage = determineStage(vo.getCyclePercent(), accessory.getWornStatus());
         vo.setStage(stage);
         vo.setStageLabel(getStageLabel(stage));
         return vo;
+    }
+
+    private List<ReplacementRecord> getReplacementHistory(Long accessoryId) {
+        LambdaQueryWrapper<ReplacementRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ReplacementRecord::getAccessoryId, accessoryId);
+        wrapper.orderByDesc(ReplacementRecord::getReplaceDate);
+        return replacementRecordMapper.selectList(wrapper);
     }
 
     private LocalDate getLastReplaceDate(Long accessoryId) {

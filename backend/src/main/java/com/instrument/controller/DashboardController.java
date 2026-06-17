@@ -52,4 +52,9 @@ public class DashboardController {
     public Result<WornHeatmapVO> wornHeatmap() {
         return Result.success(dashboardService.wornHeatmap());
     }
+
+    @GetMapping("/risk-distribution")
+    public Result<List<RiskDistributionVO>> riskDistribution() {
+        return Result.success(dashboardService.riskDistribution());
+    }
 }

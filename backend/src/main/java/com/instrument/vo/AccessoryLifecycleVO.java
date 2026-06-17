@@ -20,4 +20,9 @@ public class AccessoryLifecycleVO implements Serializable {
     private String wornStatus;
     private String stage;
     private String stageLabel;
+
+    private String riskLevel;
+    private String riskLabel;
+    private String riskColor;
+    private Integer riskScore;
 }

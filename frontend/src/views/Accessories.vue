@@ -84,6 +84,15 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="风险等级" width="120" align="center">
+          <template #default="{ row }">
+            <el-tooltip :content="getRiskTooltip(row)" placement="top">
+              <el-tag :color="getRiskBgColor(row)" :style="{ color: getRiskColor(row), borderColor: getRiskColor(row), borderWidth: '1px' }" effect="light" size="small">
+                <span style="font-weight: 600">{{ getRiskLabel(row) }}</span>
+              </el-tag>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column label="周期状态" width="160" align="center">
           <template #default="{ row }">
             <div class="cycle-status-cell">
@@ -1134,6 +1143,155 @@ const getWornLabel = (code) => {
 const getWornTagType = (code) => {
   const map = { good: 'success', slight: 'warning', severe: 'danger', broken: 'info' }
   return map[code] || 'info'
+}
+
+const RISK_LEVELS = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
+  EXTREME: 'extreme'
+}
+
+const RISK_LABELS = {
+  low: '低风险',
+  medium: '中风险',
+  high: '高风险',
+  critical: '严重风险',
+  extreme: '极端风险'
+}
+
+const RISK_COLORS = {
+  low: '#67c23a',
+  medium: '#409eff',
+  high: '#e6a23c',
+  critical: '#f56c6c',
+  extreme: '#9c27b0'
+}
+
+const RISK_BG_COLORS = {
+  low: '#f0f9eb',
+  medium: '#ecf5ff',
+  high: '#fdf6ec',
+  critical: '#fef0f0',
+  extreme: '#f3e5f5'
+}
+
+const WORN_STATUS_SCORES = {
+  good: 0,
+  slight: 20,
+  severe: 70,
+  broken: 100
+}
+
+const calculateRisk = (row) => {
+  const standardCycle = row.standardCycle || 0
+  const purchaseDate = row.purchaseDate ? dayjs(row.purchaseDate) : null
+  const usedDays = purchaseDate ? Math.max(dayjs().diff(purchaseDate, 'day'), 0) : 0
+  const cyclePercent = standardCycle > 0 ? Math.min(Math.round((usedDays / standardCycle) * 100), 100) : 0
+  const daysLeft = standardCycle > 0 ? standardCycle - usedDays : null
+
+  let cycleScore = 0
+  if (standardCycle > 0) {
+    if (cyclePercent >= 150) cycleScore = 95
+    else if (cyclePercent >= 120) cycleScore = 85
+    else if (cyclePercent >= 100) cycleScore = 75
+    else if (cyclePercent >= 90) cycleScore = 60
+    else if (cyclePercent >= 80) cycleScore = 45
+    else if (cyclePercent >= 50) cycleScore = 25
+    else if (cyclePercent >= 30) cycleScore = 10
+  }
+
+  const wornScore = WORN_STATUS_SCORES[row.wornStatus] || 0
+
+  let expiredPenalty = 0
+  if (daysLeft !== null && daysLeft < 0 && standardCycle > 0) {
+    const overdueDays = Math.abs(daysLeft)
+    const overdueRatio = overdueDays / standardCycle
+    if (overdueRatio >= 1.0) expiredPenalty = 25
+    else if (overdueRatio >= 0.5) expiredPenalty = 18
+    else if (overdueRatio >= 0.2) expiredPenalty = 12
+    else expiredPenalty = 6
+  }
+
+  let cycleWeight = 0.45
+  let wornWeight = 0.40
+  const penaltyWeight = 0.15
+
+  if (row.wornStatus === 'broken') {
+    wornWeight = 0.60
+    cycleWeight = 0.25
+  }
+
+  let combinedScore = Math.round(cycleScore * cycleWeight + wornScore * wornWeight + expiredPenalty * penaltyWeight)
+
+  if (row.wornStatus === 'broken') {
+    combinedScore = Math.max(combinedScore, 90)
+  } else if (row.wornStatus === 'severe') {
+    combinedScore = Math.max(combinedScore, 65)
+  }
+
+  combinedScore = Math.min(Math.max(combinedScore, 0), 100)
+
+  let level = RISK_LEVELS.LOW
+  if (row.wornStatus === 'broken') {
+    level = RISK_LEVELS.EXTREME
+  } else if (row.wornStatus === 'severe' && combinedScore >= 80) {
+    level = RISK_LEVELS.CRITICAL
+  } else if (daysLeft !== null && daysLeft < 0) {
+    const overdue = Math.abs(daysLeft)
+    if (overdue >= 180) {
+      level = RISK_LEVELS.CRITICAL
+    } else if (overdue >= 60) {
+      level = combinedScore >= 80 ? RISK_LEVELS.CRITICAL : RISK_LEVELS.HIGH
+    }
+  }
+
+  if (level === RISK_LEVELS.LOW) {
+    if (combinedScore >= 90) level = RISK_LEVELS.EXTREME
+    else if (combinedScore >= 75) level = RISK_LEVELS.CRITICAL
+    else if (combinedScore >= 55) level = RISK_LEVELS.HIGH
+    else if (combinedScore >= 30) level = RISK_LEVELS.MEDIUM
+  }
+
+  return {
+    level,
+    label: RISK_LABELS[level],
+    color: RISK_COLORS[level],
+    bgColor: RISK_BG_COLORS[level],
+    score: combinedScore,
+    cyclePercent,
+    daysLeft,
+    usedDays
+  }
+}
+
+const getRiskLabel = (row) => {
+  return calculateRisk(row).label
+}
+
+const getRiskColor = (row) => {
+  return calculateRisk(row).color
+}
+
+const getRiskBgColor = (row) => {
+  return calculateRisk(row).bgColor
+}
+
+const getRiskTooltip = (row) => {
+  const risk = calculateRisk(row)
+  const parts = [`风险得分: ${risk.score}`]
+  if (row.standardCycle > 0) {
+    parts.push(`周期使用: ${risk.cyclePercent}%`)
+    if (risk.daysLeft !== null) {
+      if (risk.daysLeft >= 0) {
+        parts.push(`剩余: ${risk.daysLeft}天`)
+      } else {
+        parts.push(`已超期: ${Math.abs(risk.daysLeft)}天`)
+      }
+    }
+  }
+  return parts.join(' | ')
 }
 
 const goToSpecPage = () => {
