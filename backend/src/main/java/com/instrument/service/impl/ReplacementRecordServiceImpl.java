@@ -71,7 +71,11 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         BeanUtils.copyProperties(dto, entity);
         fillAccessoryInfo(entity, dto.getAccessoryId());
         calculateUsageDays(entity, dto.getAccessoryId(), null);
-        return recordMapper.insert(entity) > 0;
+        boolean result = recordMapper.insert(entity) > 0;
+        if (result) {
+            recalculateAllUsageDays(dto.getAccessoryId());
+        }
+        return result;
     }
 
     @Override
@@ -81,23 +85,74 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         BeanUtils.copyProperties(dto, entity);
         fillAccessoryInfo(entity, dto.getAccessoryId());
         calculateUsageDays(entity, dto.getAccessoryId(), dto.getId());
-        return recordMapper.updateById(entity) > 0;
+        boolean result = recordMapper.updateById(entity) > 0;
+        if (result) {
+            recalculateAllUsageDays(dto.getAccessoryId());
+        }
+        return result;
     }
 
     @Override
     @Transactional
     public boolean remove(List<Long> ids) {
-        return recordMapper.deleteBatchIds(ids) > 0;
+        if (ids == null || ids.isEmpty()) {
+            return false;
+        }
+        List<Long> accessoryIds = new ArrayList<>();
+        for (Long id : ids) {
+            ReplacementRecord record = recordMapper.selectById(id);
+            if (record != null && record.getAccessoryId() != null) {
+                if (!accessoryIds.contains(record.getAccessoryId())) {
+                    accessoryIds.add(record.getAccessoryId());
+                }
+            }
+        }
+        boolean result = recordMapper.deleteBatchIds(ids) > 0;
+        if (result) {
+            for (Long accessoryId : accessoryIds) {
+                recalculateAllUsageDays(accessoryId);
+            }
+        }
+        return result;
+    }
+
+    private void recalculateAllUsageDays(Long accessoryId) {
+        if (accessoryId == null) return;
+        List<ReplacementRecord> allRecords = history(accessoryId);
+        if (allRecords.isEmpty()) return;
+
+        allRecords.sort(Comparator.comparing(ReplacementRecord::getReplaceDate));
+
+        Accessory accessory = accessoryMapper.selectById(accessoryId);
+
+        for (int i = 0; i < allRecords.size(); i++) {
+            ReplacementRecord current = allRecords.get(i);
+            int usageDays;
+            if (i == 0) {
+                if (accessory != null && accessory.getPurchaseDate() != null) {
+                    usageDays = (int) Math.max(ChronoUnit.DAYS.between(accessory.getPurchaseDate(), current.getReplaceDate()), 0);
+                } else {
+                    usageDays = 0;
+                }
+            } else {
+                ReplacementRecord previous = allRecords.get(i - 1);
+                usageDays = (int) Math.max(ChronoUnit.DAYS.between(previous.getReplaceDate(), current.getReplaceDate()), 0);
+            }
+            if (!usageDays.equals(current.getUsageDays())) {
+                current.setUsageDays(usageDays);
+                recordMapper.updateById(current);
+            }
+        }
     }
 
     @Override
     public List<ReplacementTimelineVO> timeline(ReplacementQueryDTO query) {
-        List<ReplacementRecord> allRecords = list(query);
-        if (allRecords.isEmpty()) {
+        List<ReplacementRecord> filteredRecords = list(query);
+        if (filteredRecords.isEmpty()) {
             return new ArrayList<>();
         }
 
-        Map<Long, List<ReplacementRecord>> grouped = allRecords.stream()
+        Map<Long, List<ReplacementRecord>> grouped = filteredRecords.stream()
                 .collect(Collectors.groupingBy(ReplacementRecord::getAccessoryId));
 
         List<ReplacementTimelineVO> result = new ArrayList<>();
@@ -107,6 +162,14 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
 
             records.sort(Comparator.comparing(ReplacementRecord::getReplaceDate).reversed());
 
+            List<ReplacementRecord> allHistory = history(accessoryId);
+            allHistory.sort(Comparator.comparing(ReplacementRecord::getReplaceDate).reversed());
+
+            Map<Long, Integer> idToHistoryIndex = new java.util.HashMap<>();
+            for (int j = 0; j < allHistory.size(); j++) {
+                idToHistoryIndex.put(allHistory.get(j).getId(), j);
+            }
+
             ReplacementTimelineVO vo = new ReplacementTimelineVO();
             vo.setAccessoryId(accessoryId);
             vo.setAccessoryName(records.get(0).getAccessoryName());
@@ -114,7 +177,7 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
             vo.setInstrumentName(records.get(0).getInstrumentName());
             vo.setImageUrl(records.get(0).getImageUrl());
             vo.setStandardCycle(records.get(0).getStandardCycle());
-            vo.setRecordCount(records.size());
+            vo.setRecordCount(allHistory.size());
 
             List<ReplacementTimelineItemVO> items = new ArrayList<>();
             int totalUsageDays = 0;
@@ -124,12 +187,17 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
                 ReplacementTimelineItemVO item = new ReplacementTimelineItemVO();
                 BeanUtils.copyProperties(record, item);
 
-                if (i < records.size() - 1) {
-                    ReplacementRecord nextRecord = records.get(i + 1);
-                    long interval = ChronoUnit.DAYS.between(nextRecord.getReplaceDate(), record.getReplaceDate());
-                    item.setIntervalDays((int) interval);
-                    item.setIntervalLabel("距上次 " + interval + " 天");
+                Integer historyIndex = idToHistoryIndex.get(record.getId());
+
+                if (historyIndex != null && historyIndex < allHistory.size() - 1) {
+                    ReplacementRecord prevRecord = allHistory.get(historyIndex + 1);
+                    long interval = ChronoUnit.DAYS.between(prevRecord.getReplaceDate(), record.getReplaceDate());
+                    item.setIntervalDays((int) Math.abs(interval));
+                    item.setIntervalLabel("距上次 " + Math.abs(interval) + " 天");
                     item.setIsFirst(false);
+                } else if (historyIndex != null && historyIndex == allHistory.size() - 1) {
+                    item.setIsFirst(true);
+                    item.setIntervalLabel("首次记录");
                 } else {
                     item.setIsFirst(true);
                     item.setIntervalLabel("首次记录");

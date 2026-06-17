@@ -366,7 +366,19 @@ const loadHistory = async () => {
     const res = await replacementApi.list()
     historyList.value = res.data || res || []
   } catch {
-    historyList.value = []
+    const allRecords = getMockAllRecords()
+    const accessoriesMap = {}
+    accessoryList.value.forEach(a => { accessoriesMap[a.id] = a })
+    allRecords.forEach(r => recalculateMockUsageDays(allRecords, r.accessoryId))
+    historyList.value = allRecords.map(r => {
+      const acc = accessoriesMap[r.accessoryId] || {}
+      return {
+        ...r,
+        accessoryName: acc.name || '',
+        specification: acc.specification || '',
+        instrumentName: acc.instrumentName || ''
+      }
+    })
   }
 }
 
@@ -420,18 +432,77 @@ const loadTimeline = async () => {
   }
 }
 
+const getMockAllRecords = () => {
+  return [
+    { id: 1, accessoryId: 1, replaceDate: '2026-04-15', standardCycle: 90, usageDays: 0, operator: '本人', remark: '音色变闷，及时更换' },
+    { id: 2, accessoryId: 2, replaceDate: '2026-05-10', standardCycle: 180, usageDays: 0, operator: '本人', remark: '' },
+    { id: 3, accessoryId: 3, replaceDate: '2026-05-25', standardCycle: 60, usageDays: 0, operator: '本人', remark: '丢了一个，换新的' },
+    { id: 4, accessoryId: 1, replaceDate: '2026-01-20', standardCycle: 90, usageDays: 0, operator: '本人', remark: '使用近三月' },
+    { id: 5, accessoryId: 6, replaceDate: '2026-03-01', standardCycle: 180, usageDays: 0, operator: '本人', remark: '深度保养使用' },
+    { id: 6, accessoryId: 1, replaceDate: '2025-10-15', standardCycle: 90, usageDays: 0, operator: '本人', remark: '常规更换' }
+  ]
+}
+
+const recalculateMockUsageDays = (records, accessoryId) => {
+  const accessoriesMap = {}
+  accessoryList.value.forEach(a => { accessoriesMap[a.id] = a })
+  const acc = accessoriesMap[accessoryId]
+
+  const related = records.filter(r => r.accessoryId === accessoryId)
+  related.sort((a, b) => dayjs(a.replaceDate).valueOf() - dayjs(b.replaceDate).valueOf())
+
+  related.forEach((item, index) => {
+    if (index === 0) {
+      if (acc && acc.purchaseDate) {
+        item.usageDays = Math.max(dayjs(item.replaceDate).diff(dayjs(acc.purchaseDate), 'day'), 0)
+      } else {
+        item.usageDays = 0
+      }
+    } else {
+      item.usageDays = Math.max(dayjs(item.replaceDate).diff(dayjs(related[index - 1].replaceDate), 'day'), 0)
+    }
+  })
+}
+
 const loadMockTimeline = () => {
   const accessoriesMap = {}
   accessoryList.value.forEach(a => { accessoriesMap[a.id] = a })
   
-  const mockRecords = [
-    { id: 1, accessoryId: 1, replaceDate: '2026-04-15', standardCycle: 90, usageDays: 60, operator: '本人', remark: '音色变闷，及时更换' },
-    { id: 2, accessoryId: 2, replaceDate: '2026-05-10', standardCycle: 180, usageDays: 35, operator: '本人', remark: '' },
-    { id: 3, accessoryId: 3, replaceDate: '2026-05-25', standardCycle: 60, usageDays: 20, operator: '本人', remark: '丢了一个，换新的' },
-    { id: 4, accessoryId: 1, replaceDate: '2026-01-20', standardCycle: 90, usageDays: 85, operator: '本人', remark: '使用近三月' },
-    { id: 5, accessoryId: 6, replaceDate: '2026-03-01', standardCycle: 180, usageDays: 105, operator: '本人', remark: '深度保养使用' },
-    { id: 6, accessoryId: 1, replaceDate: '2025-10-15', standardCycle: 90, usageDays: 75, operator: '本人', remark: '常规更换' }
-  ]
+  let mockRecords = getMockAllRecords()
+
+  mockRecords.forEach(r => {
+    recalculateMockUsageDays(mockRecords, r.accessoryId)
+  })
+
+  if (filters.dateRange && filters.dateRange.length === 2) {
+    const start = dayjs(filters.dateRange[0])
+    const end = dayjs(filters.dateRange[1])
+    mockRecords = mockRecords.filter(r => {
+      const d = dayjs(r.replaceDate)
+      return (d.isSame(start, 'day') || d.isAfter(start)) && (d.isSame(end, 'day') || d.isBefore(end))
+    })
+  }
+  if (filters.accessoryId) {
+    mockRecords = mockRecords.filter(r => r.accessoryId === filters.accessoryId)
+  }
+  if (filters.keyword) {
+    const kw = filters.keyword.toLowerCase()
+    mockRecords = mockRecords.filter(r => {
+      const acc = accessoriesMap[r.accessoryId]
+      return acc && (acc.name.toLowerCase().includes(kw) || (acc.specification && acc.specification.toLowerCase().includes(kw)))
+    })
+  }
+
+  const allHistoryMap = {}
+  const allRecords = getMockAllRecords()
+  allRecords.forEach(r => {
+    recalculateMockUsageDays(allRecords, r.accessoryId)
+    if (!allHistoryMap[r.accessoryId]) allHistoryMap[r.accessoryId] = []
+    allHistoryMap[r.accessoryId].push(r)
+  })
+  Object.values(allHistoryMap).forEach(list => {
+    list.sort((a, b) => dayjs(b.replaceDate).valueOf() - dayjs(a.replaceDate).valueOf())
+  })
 
   const grouped = {}
   mockRecords.forEach(r => {
@@ -454,15 +525,25 @@ const loadMockTimeline = () => {
 
   Object.values(grouped).forEach(group => {
     group.items.sort((a, b) => dayjs(b.replaceDate).valueOf() - dayjs(a.replaceDate).valueOf())
-    group.recordCount = group.items.length
     
+    const allHistory = allHistoryMap[group.accessoryId] || []
+    group.recordCount = allHistory.length
+    
+    const idToHistoryIndex = {}
+    allHistory.forEach((h, idx) => { idToHistoryIndex[h.id] = idx })
+
     let totalDays = 0
-    group.items.forEach((item, index) => {
-      if (index < group.items.length - 1) {
-        const interval = dayjs(item.replaceDate).diff(dayjs(group.items[index + 1].replaceDate), 'day')
-        item.intervalDays = interval
-        item.intervalLabel = `距上次 ${interval} 天`
+    group.items.forEach((item) => {
+      const historyIndex = idToHistoryIndex[item.id]
+      if (historyIndex !== undefined && historyIndex < allHistory.length - 1) {
+        const prevRecord = allHistory[historyIndex + 1]
+        const interval = dayjs(item.replaceDate).diff(dayjs(prevRecord.replaceDate), 'day')
+        item.intervalDays = Math.abs(interval)
+        item.intervalLabel = `距上次 ${Math.abs(interval)} 天`
         item.isFirst = false
+      } else if (historyIndex !== undefined && historyIndex === allHistory.length - 1) {
+        item.isFirst = true
+        item.intervalLabel = '首次记录'
       } else {
         item.isFirst = true
         item.intervalLabel = '首次记录'
@@ -470,7 +551,7 @@ const loadMockTimeline = () => {
       if (item.usageDays) totalDays += item.usageDays
     })
     
-    group.avgUsageDays = Math.round(totalDays / group.items.length)
+    group.avgUsageDays = group.items.length > 0 ? Math.round(totalDays / group.items.length) : 0
   })
 
   timelineData.value = Object.values(grouped).sort((a, b) => {
@@ -483,14 +564,46 @@ const loadMockTimeline = () => {
 const loadMockList = () => {
   const accessoriesMap = {}
   accessoryList.value.forEach(a => { accessoriesMap[a.id] = a })
-  tableData.value = [
-    { id: 1, accessoryId: 1, accessoryName: '木吉他琴弦', specification: '012-053 磷铜覆膜', instrumentName: '木吉他', imageUrl: '', replaceDate: '2026-04-15', standardCycle: 90, usageDays: 60, operator: '本人', remark: '音色变闷，及时更换' },
-    { id: 2, accessoryId: 2, accessoryName: '小提琴松香', specification: '无尘轻型 4/4', instrumentName: '小提琴', imageUrl: '', replaceDate: '2026-05-10', standardCycle: 180, usageDays: 35, operator: '本人', remark: '' },
-    { id: 3, accessoryId: 3, accessoryName: '电吉他拨片', specification: '0.88mm 尼龙防滑', instrumentName: '电吉他', imageUrl: '', replaceDate: '2026-05-25', standardCycle: 60, usageDays: 20, operator: '本人', remark: '丢了一个，换新的' },
-    { id: 4, accessoryId: 1, accessoryName: '木吉他琴弦', specification: '012-053 磷铜覆膜', instrumentName: '木吉他', imageUrl: '', replaceDate: '2026-01-20', standardCycle: 90, usageDays: 85, operator: '本人', remark: '使用近三月' },
-    { id: 5, accessoryId: 6, accessoryName: '指板清洁剂', specification: '柠檬油 100ml', instrumentName: '木吉他', imageUrl: '', replaceDate: '2026-03-01', standardCycle: 180, usageDays: 105, operator: '本人', remark: '深度保养使用' }
-  ]
-  pagination.total = tableData.value.length
+  
+  let allRecords = getMockAllRecords().map(r => {
+    const acc = accessoriesMap[r.accessoryId] || {}
+    return {
+      ...r,
+      accessoryName: acc.name || '',
+      specification: acc.specification || '',
+      instrumentName: acc.instrumentName || '',
+      imageUrl: acc.imageUrl || ''
+    }
+  })
+
+  allRecords.forEach(r => {
+    recalculateMockUsageDays(allRecords, r.accessoryId)
+  })
+
+  if (filters.dateRange && filters.dateRange.length === 2) {
+    const start = dayjs(filters.dateRange[0])
+    const end = dayjs(filters.dateRange[1])
+    allRecords = allRecords.filter(r => {
+      const d = dayjs(r.replaceDate)
+      return (d.isSame(start, 'day') || d.isAfter(start)) && (d.isSame(end, 'day') || d.isBefore(end))
+    })
+  }
+  if (filters.accessoryId) {
+    allRecords = allRecords.filter(r => r.accessoryId === filters.accessoryId)
+  }
+  if (filters.keyword) {
+    const kw = filters.keyword.toLowerCase()
+    allRecords = allRecords.filter(r => 
+      r.accessoryName.toLowerCase().includes(kw) || 
+      (r.specification && r.specification.toLowerCase().includes(kw))
+    )
+  }
+
+  allRecords.sort((a, b) => dayjs(b.replaceDate).valueOf() - dayjs(a.replaceDate).valueOf())
+  
+  const startIdx = (pagination.pageNum - 1) * pagination.pageSize
+  tableData.value = allRecords.slice(startIdx, startIdx + pagination.pageSize)
+  pagination.total = allRecords.length
 }
 
 const handleSearch = () => {
