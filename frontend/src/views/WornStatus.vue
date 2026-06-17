@@ -57,8 +57,47 @@
       <el-select v-model="filters.typeCode" placeholder="配件类型" clearable style="width: 150px" @change="handleSearch">
         <el-option v-for="t in accessoryTypes" :key="t.code" :label="t.label" :value="t.code" />
       </el-select>
+      <el-select v-model="filters.instrument" placeholder="适配乐器" clearable style="width: 150px" @change="handleSearch">
+        <el-option v-for="ins in instrumentList" :key="ins.code" :label="ins.label" :value="ins.code" />
+      </el-select>
       <el-button @click="clearFilters">
         <el-icon><RefreshLeft /></el-icon>重置筛选
+      </el-button>
+    </div>
+
+    <div class="batch-select-bar">
+      <span class="batch-select-label">快速选择：</span>
+      <el-dropdown trigger="click" @command="selectByInstrument">
+        <el-button size="small" plain>
+          <el-icon><Tickets /></el-icon>按乐器全选<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item v-for="ins in instrumentList" :key="ins.code" :command="ins.code">
+              {{ ins.label }}
+              <span class="batch-count-hint">({{ getInstrumentCount(ins.code) }})</span>
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-dropdown trigger="click" @command="selectByGroup">
+        <el-button size="small" plain>
+          <el-icon><FolderOpened /></el-icon>按分组全选<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item v-for="g in groupList" :key="g.id" :command="g.id">
+              {{ g.name }}
+              <span class="batch-count-hint">({{ getGroupCount(g.id) }})</span>
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-button size="small" plain @click="selectAllCurrent">
+        <el-icon><Check /></el-icon>选择当前页全部
+      </el-button>
+      <el-button size="small" plain type="danger" @click="clearSelection" v-show="selectedRows.length > 0">
+        <el-icon><Close /></el-icon>取消选择 ({{ selectedRows.length }})
       </el-button>
     </div>
 
@@ -145,12 +184,105 @@
         />
       </div>
     </el-card>
+
+    <el-dialog
+      v-model="confirmDialogVisible"
+      title="批量标注确认"
+      width="720px"
+      destroy-on-close
+      :close-on-click-modal="false"
+    >
+      <div class="confirm-dialog-body">
+        <div class="confirm-summary-header">
+          <el-icon :size="20" color="#e6a23c"><WarningFilled /></el-icon>
+          <span>即将将 <b>{{ pendingBatchRows.length }}</b> 个配件的状态统一标注为</span>
+          <el-tag :type="getWornTagType(pendingBatchStatus)" effect="dark" size="large">
+            <span class="tag-dot" :style="{ background: getWornColor(pendingBatchStatus) }"></span>
+            {{ getWornLabel(pendingBatchStatus) }}
+          </el-tag>
+        </div>
+
+        <div class="confirm-change-summary">
+          <div class="change-summary-title">状态变化摘要</div>
+          <div class="change-summary-grid">
+            <div
+              v-for="change in batchChangeSummary"
+              :key="change.from"
+              class="change-summary-item"
+            >
+              <div class="change-from">
+                <span class="change-label">原状态</span>
+                <el-tag :type="getWornTagType(change.from)" effect="light" size="small">
+                  {{ getWornLabel(change.from) }}
+                </el-tag>
+              </div>
+              <div class="change-arrow">
+                <el-icon><Right /></el-icon>
+              </div>
+              <div class="change-to">
+                <span class="change-label">新状态</span>
+                <el-tag :type="getWornTagType(pendingBatchStatus)" effect="dark" size="small">
+                  {{ getWornLabel(pendingBatchStatus) }}
+                </el-tag>
+              </div>
+              <div class="change-count">
+                <span class="count-num">{{ change.count }}</span>
+                <span class="count-label">个配件</span>
+              </div>
+            </div>
+          </div>
+          <div class="change-summary-note" v-if="unchangedCount > 0">
+            其中 {{ unchangedCount }} 个配件状态无变化
+          </div>
+        </div>
+
+        <div class="confirm-list-section">
+          <div class="confirm-list-title">
+            受影响配件清单
+            <span class="confirm-list-count">共 {{ affectedRows.length }} 项</span>
+          </div>
+          <div class="confirm-list-scroll">
+            <div
+              v-for="row in affectedRows"
+              :key="row.id"
+              class="confirm-list-item"
+            >
+              <div class="confirm-item-main">
+                <span class="confirm-item-name">{{ row.name }}</span>
+                <span class="confirm-item-spec">{{ row.specification }}</span>
+              </div>
+              <div class="confirm-item-meta">
+                <span class="confirm-item-instrument">{{ row.instrumentName }}</span>
+                <span class="confirm-item-group">{{ row.groupName }}</span>
+              </div>
+              <div class="confirm-item-status-change">
+                <el-tag :type="getWornTagType(row.wornStatus)" effect="light" size="small">
+                  {{ getWornLabel(row.wornStatus) }}
+                </el-tag>
+                <el-icon class="change-arrow-icon"><Right /></el-icon>
+                <el-tag :type="getWornTagType(pendingBatchStatus)" effect="dark" size="small">
+                  {{ getWornLabel(pendingBatchStatus) }}
+                </el-tag>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="confirmDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="executeBatchMark" :loading="batchSubmitting">
+          确认标注
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Rank, ArrowDown, Tickets, FolderOpened, Check, Close, WarningFilled, Right } from '@element-plus/icons-vue'
 import { accessoryApi, dictApi, groupApi, dashboardApi } from '@/api'
 import WornHeatmap from '@/components/WornHeatmap.vue'
 
@@ -159,10 +291,16 @@ const tableRef = ref(null)
 const selectedRows = ref([])
 const groupList = ref([])
 const accessoryTypes = ref([])
+const instrumentList = ref([])
 const activeStatus = ref('')
 const allAccessories = ref([])
 const heatmapData = ref({})
 const heatmapLoading = ref(false)
+
+const confirmDialogVisible = ref(false)
+const pendingBatchStatus = ref('')
+const pendingBatchRows = ref([])
+const batchSubmitting = ref(false)
 
 const wornStatuses = ref([
   { code: 'good', label: '完好', color: '#67c23a' },
@@ -175,7 +313,8 @@ const filters = reactive({
   keyword: '',
   groupId: null,
   typeCode: '',
-  wornStatus: ''
+  wornStatus: '',
+  instrument: ''
 })
 
 const pagination = reactive({
@@ -196,6 +335,63 @@ const statusOverview = computed(() => {
     count: counts[w.code] || 0
   }))
 })
+
+const affectedRows = computed(() => {
+  return pendingBatchRows.value.filter(r => r.wornStatus !== pendingBatchStatus.value)
+})
+
+const unchangedCount = computed(() => {
+  return pendingBatchRows.value.filter(r => r.wornStatus === pendingBatchStatus.value).length
+})
+
+const batchChangeSummary = computed(() => {
+  const map = {}
+  affectedRows.value.forEach(r => {
+    if (!map[r.wornStatus]) map[r.wornStatus] = 0
+    map[r.wornStatus]++
+  })
+  return Object.entries(map).map(([from, count]) => ({ from, count }))
+})
+
+const getInstrumentCount = (code) => {
+  return tableData.value.filter(r => r.instrument === code).length
+}
+
+const getGroupCount = (groupId) => {
+  return tableData.value.filter(r => r.groupId === groupId).length
+}
+
+const selectByInstrument = (instrumentCode) => {
+  tableRef.value.clearSelection()
+  nextTick(() => {
+    tableData.value.forEach(row => {
+      if (row.instrument === instrumentCode) {
+        tableRef.value.toggleRowSelection(row, true)
+      }
+    })
+  })
+}
+
+const selectByGroup = (groupId) => {
+  tableRef.value.clearSelection()
+  nextTick(() => {
+    tableData.value.forEach(row => {
+      if (row.groupId === groupId) {
+        tableRef.value.toggleRowSelection(row, true)
+      }
+    })
+  })
+}
+
+const selectAllCurrent = () => {
+  tableData.value.forEach(row => {
+    tableRef.value.toggleRowSelection(row, true)
+  })
+}
+
+const clearSelection = () => {
+  tableRef.value?.clearSelection()
+}
 
 const loadDict = async () => {
   try {
@@ -225,6 +421,20 @@ const loadDict = async () => {
       { id: 1, name: '弹奏配件' },
       { id: 2, name: '辅助工具' },
       { id: 3, name: '养护耗材' }
+    ]
+  }
+  try {
+    const insRes = await dictApi.instruments()
+    instrumentList.value = insRes.data || insRes || []
+  } catch {}
+  if (instrumentList.value.length === 0) {
+    instrumentList.value = [
+      { code: 'guitar-acoustic', label: '木吉他' },
+      { code: 'guitar-electric', label: '电吉他' },
+      { code: 'guitar-bass', label: '贝斯' },
+      { code: 'violin', label: '小提琴' },
+      { code: 'ukulele', label: '尤克里里' },
+      { code: 'erhu', label: '二胡' }
     ]
   }
 }
@@ -376,6 +586,7 @@ const clearFilters = () => {
   filters.groupId = null
   filters.typeCode = ''
   filters.wornStatus = ''
+  filters.instrument = ''
   activeStatus.value = ''
   handleSearch()
 }
@@ -406,33 +617,39 @@ const handleQuickMark = async (row, status) => {
   }
 }
 
-const handleBatchMark = async (code) => {
+const handleBatchMark = (code) => {
   if (selectedRows.value.length === 0) {
     ElMessage.warning('请先选择配件')
     return
   }
-  ElMessageBox.confirm(
-    `确定将选中的 ${selectedRows.value.length} 个配件标注为「${getWornLabel(code)}」吗？`,
-    '批量标注',
-    { type: 'warning', confirmButtonText: '确定标注', cancelButtonText: '取消' }
-  ).then(async () => {
-    const originalStatuses = selectedRows.value.map(r => ({ id: r.id, wornStatus: r.wornStatus }))
-    try {
-      await accessoryApi.batchUpdateStatus(selectedRows.value.map(r => r.id), code)
-      ElMessage.success('批量标注成功')
-      tableRef.value.clearSelection()
-      loadAllList()
-      loadList()
-    } catch (e) {
-      originalStatuses.forEach(os => {
-        const row = tableData.value.find(r => r.id === os.id)
-        if (row) row.wornStatus = os.wornStatus
-      })
-      if (e?.message !== 'cancel') {
-        ElMessage.error(e?.message || '批量标注失败，请稍后重试')
-      }
+  pendingBatchStatus.value = code
+  pendingBatchRows.value = [...selectedRows.value]
+  confirmDialogVisible.value = true
+}
+
+const executeBatchMark = async () => {
+  batchSubmitting.value = true
+  const originalStatuses = pendingBatchRows.value.map(r => ({ id: r.id, wornStatus: r.wornStatus }))
+  const ids = pendingBatchRows.value.map(r => r.id)
+  const code = pendingBatchStatus.value
+  try {
+    await accessoryApi.batchUpdateStatus(ids, code)
+    ElMessage.success('批量标注成功')
+    tableRef.value.clearSelection()
+    confirmDialogVisible.value = false
+    loadAllList()
+    loadList()
+  } catch (e) {
+    originalStatuses.forEach(os => {
+      const row = tableData.value.find(r => r.id === os.id)
+      if (row) row.wornStatus = os.wornStatus
+    })
+    if (e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '批量标注失败，请稍后重试')
     }
-  }).catch(() => {})
+  } finally {
+    batchSubmitting.value = false
+  }
 }
 
 const getWornLabel = (code) => {
@@ -586,6 +803,217 @@ onMounted(() => {
       font-weight: 400;
       color: #909399;
       margin-left: 8px;
+    }
+  }
+}
+
+.batch-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+  flex-wrap: wrap;
+
+  .batch-select-label {
+    font-size: 13px;
+    color: #606266;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+}
+
+.batch-count-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 4px;
+}
+
+.confirm-dialog-body {
+  .confirm-summary-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #606266;
+    padding: 14px 16px;
+    background: #fdf6ec;
+    border: 1px solid #f5dab1;
+    border-radius: 8px;
+    margin-bottom: 20px;
+
+    b {
+      color: #e6a23c;
+      font-size: 18px;
+    }
+  }
+
+  .confirm-change-summary {
+    margin-bottom: 20px;
+
+    .change-summary-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #303133;
+      margin-bottom: 12px;
+      padding-left: 8px;
+      border-left: 3px solid #409eff;
+    }
+
+    .change-summary-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .change-summary-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: #fafbfc;
+      border: 1px solid #ebeef5;
+      border-radius: 6px;
+
+      .change-from,
+      .change-to {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+
+        .change-label {
+          font-size: 11px;
+          color: #909399;
+        }
+      }
+
+      .change-arrow {
+        color: #c0c4cc;
+        font-size: 16px;
+      }
+
+      .change-count {
+        margin-left: auto;
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+
+        .count-num {
+          font-size: 20px;
+          font-weight: 700;
+          color: #f56c6c;
+        }
+
+        .count-label {
+          font-size: 12px;
+          color: #909399;
+        }
+      }
+    }
+
+    .change-summary-note {
+      font-size: 12px;
+      color: #909399;
+      margin-top: 8px;
+      padding-left: 4px;
+    }
+  }
+
+  .confirm-list-section {
+    .confirm-list-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #303133;
+      margin-bottom: 12px;
+      padding-left: 8px;
+      border-left: 3px solid #f56c6c;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .confirm-list-count {
+        font-size: 12px;
+        font-weight: 400;
+        color: #909399;
+      }
+    }
+
+    .confirm-list-scroll {
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1px solid #ebeef5;
+      border-radius: 6px;
+    }
+
+    .confirm-list-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid #ebeef5;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &:hover {
+        background: #f5f7fa;
+      }
+
+      .confirm-item-main {
+        flex: 1;
+        min-width: 0;
+
+        .confirm-item-name {
+          font-size: 13px;
+          font-weight: 500;
+          color: #303133;
+          display: block;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .confirm-item-spec {
+          font-size: 11px;
+          color: #909399;
+          display: block;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+
+      .confirm-item-meta {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+
+        .confirm-item-instrument,
+        .confirm-item-group {
+          font-size: 11px;
+          padding: 2px 8px;
+          border-radius: 4px;
+          background: #f0f2f5;
+          color: #606266;
+        }
+      }
+
+      .confirm-item-status-change {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+
+        .change-arrow-icon {
+          color: #c0c4cc;
+          font-size: 14px;
+        }
+      }
     }
   }
 }
