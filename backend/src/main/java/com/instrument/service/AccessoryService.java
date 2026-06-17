@@ -40,4 +40,8 @@ public interface AccessoryService {
     com.instrument.vo.CalendarMonthVO getCalendarMonth(Integer year, Integer month);
 
     com.instrument.vo.CalendarDayVO getCalendarDay(LocalDate date);
+
+    com.instrument.vo.CycleRuleMatchVO getMatchedCycleRule(String typeCode, String instrument, String specification, Integer manualCycle);
+
+    com.instrument.vo.AccessoryCompatibilityVO checkCompatibility(String typeCode, String instrument, String specification);
 }

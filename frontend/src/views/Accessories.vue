@@ -193,10 +193,102 @@
             </el-col>
             <el-col :span="12">
               <el-form-item label="标准更换周期(天)" prop="standardCycle">
-                <el-input-number v-model="form.standardCycle" :min="1" :max="3650" style="width: 100%" @change="handleStandardCycleChange" />
+                <el-input-number v-model="form.standardCycle" :min="1" :max="3650" style="width: 100%" @change="handleStandardCycleChange" :disabled="!useManualCycle && cycleRuleMatchData?.matchedCycle" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="使用规则库">
+                <el-switch v-model="useManualCycle" active-text="人工覆盖" inactive-text="规则匹配" @change="handleUseManualCycleChange" />
               </el-form-item>
             </el-col>
           </el-row>
+
+          <div v-if="cycleRuleMatchData || cycleRuleMatchLoading" class="cycle-rule-match-panel" v-loading="cycleRuleMatchLoading">
+            <div class="reference-panel-header">
+              <el-icon><MagicStick /></el-icon>
+              <span>周期规则匹配</span>
+            </div>
+            <template v-if="cycleRuleMatchData">
+              <div class="match-result-row">
+                <div class="match-result-main">
+                  <span class="match-cycle-value">{{ cycleRuleMatchData.matchedCycle || '-' }}</span>
+                  <span class="match-cycle-unit">天</span>
+                  <span class="match-cycle-label">({{ cycleRuleMatchData.matchedCycleLabel || '' }})</span>
+                </div>
+                <el-tag v-if="cycleRuleMatchData.fromManualOverride" type="warning" size="small">人工覆盖</el-tag>
+                <el-tag v-else type="success" size="small">规则匹配</el-tag>
+              </div>
+              <div v-if="cycleRuleMatchData.specDescription" class="match-detail">
+                <span class="match-detail-label">匹配规则：</span>
+                <span class="match-detail-value">{{ cycleRuleMatchData.specDescription }}</span>
+              </div>
+              <div v-if="cycleRuleMatchData.suggestion" class="match-suggestion">
+                <el-tag :type="cycleRuleMatchData.fromManualOverride ? 'warning' : 'info'" effect="light" class="suggestion-tag">
+                  <el-icon><InfoFilled /></el-icon>
+                  {{ cycleRuleMatchData.suggestion }}
+                </el-tag>
+              </div>
+              <div v-if="cycleRuleMatchData.candidateRules && cycleRuleMatchData.candidateRules.length > 1" class="candidate-rules">
+                <div class="candidate-title">其他可选规则：</div>
+                <div class="candidate-list">
+                  <div
+                    v-for="rule in cycleRuleMatchData.candidateRules.slice(1, 4)"
+                    :key="rule.id"
+                    class="candidate-item"
+                    @click="applyCandidateRule(rule)"
+                  >
+                    <span class="candidate-cycle">{{ rule.standardCycle }}天</span>
+                    <span class="candidate-desc">{{ rule.specDescription || rule.instrumentName }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div v-if="compatibilityData || compatibilityLoading" 
+               class="compatibility-panel" 
+               :class="{
+                 'has-error': compatibilityData && !compatibilityData.compatible,
+                 'has-warning': compatibilityData && compatibilityData.compatible && compatibilityData.hasIssues && compatibilityData.hasIssues()
+               }"
+               v-loading="compatibilityLoading">
+            <div class="reference-panel-header">
+              <el-icon><CircleCheck /></el-icon>
+              <span>适配校验</span>
+              <el-tag
+                v-if="compatibilityData"
+                :type="compatibilityData.compatible ? (compatibilityData.hasIssues && compatibilityData.hasIssues() ? 'warning' : 'success') : 'danger'"
+                size="small"
+                class="compatibility-tag"
+              >
+                {{ compatibilityData.compatible ? (compatibilityData.hasIssues && compatibilityData.hasIssues() ? '有警告' : '适配良好') : '不匹配' }}
+              </el-tag>
+            </div>
+            <template v-if="compatibilityData">
+              <div v-if="compatibilityData.summary" class="compatibility-summary">
+                {{ compatibilityData.summary }}
+              </div>
+              <div v-if="compatibilityData.errors && compatibilityData.errors.length > 0" class="compatibility-issues">
+                <div v-for="(error, index) in compatibilityData.errors" :key="'error-' + index" class="issue-item error-item">
+                  <el-icon color="#f56c6c"><CircleClose /></el-icon>
+                  <span>{{ error }}</span>
+                </div>
+              </div>
+              <div v-if="compatibilityData.warnings && compatibilityData.warnings.length > 0" class="compatibility-issues">
+                <div v-for="(warning, index) in compatibilityData.warnings" :key="'warning-' + index" class="issue-item warning-item">
+                  <el-icon color="#e6a23c"><Warning /></el-icon>
+                  <span>{{ warning }}</span>
+                </div>
+              </div>
+              <div v-if="compatibilityData.suggestion" class="compatibility-suggestion">
+                <el-tag type="info" effect="light" class="suggestion-tag">
+                  <el-icon><InfoFilled /></el-icon>
+                  {{ compatibilityData.suggestion }}
+                </el-tag>
+              </div>
+            </template>
+          </div>
+
           <div v-if="cycleReferenceData || cycleReferenceLoading" class="cycle-reference-panel" v-loading="cycleReferenceLoading">
             <div class="reference-panel-header">
               <el-icon><InfoFilled /></el-icon>
@@ -429,7 +521,7 @@
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Timer, Operation, InfoFilled, Warning } from '@element-plus/icons-vue'
+import { Timer, Operation, InfoFilled, Warning, MagicStick, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { accessoryApi, dictApi, groupApi, replacementApi } from '@/api'
 import { compressImage } from '@/utils/image'
@@ -455,6 +547,11 @@ const lifecycleData = ref(null)
 const replacementHistory = ref([])
 const cycleReferenceLoading = ref(false)
 const cycleReferenceData = ref(null)
+const compatibilityLoading = ref(false)
+const compatibilityData = ref(null)
+const cycleRuleMatchLoading = ref(false)
+const cycleRuleMatchData = ref(null)
+const useManualCycle = ref(false)
 
 const filters = reactive({
   keyword: '',
@@ -649,6 +746,9 @@ const resetForm = () => {
     remark: ''
   })
   cycleReferenceData.value = null
+  compatibilityData.value = null
+  cycleRuleMatchData.value = null
+  useManualCycle.value = false
   formRef.value?.resetFields()
 }
 
@@ -668,21 +768,33 @@ const handleStandardCycleChange = (val) => {
 }
 
 watch(() => form.typeCode, (newType, oldType) => {
-  if (newType && newType !== oldType && dialogMode.value === 'add') {
-    const defaultCycle = TYPE_CYCLE_DEFAULTS[newType]
-    if (defaultCycle) {
-      form.standardCycle = defaultCycle
-    }
+  if (newType && newType !== oldType && dialogMode.value === 'add' && !useManualCycle.value) {
+    loadCycleRuleMatch()
   }
   loadCycleReference()
+  loadCompatibilityCheck()
 })
 
 watch(() => form.instrument, () => {
+  if (!useManualCycle.value) {
+    loadCycleRuleMatch()
+  }
   loadCycleReference()
+  loadCompatibilityCheck()
+})
+
+watch(() => form.specification, () => {
+  if (!useManualCycle.value) {
+    loadCycleRuleMatch()
+  }
+  loadCompatibilityCheck()
 })
 
 watch(() => form.standardCycle, () => {
   loadCycleReference()
+  if (useManualCycle.value) {
+    loadCycleRuleMatch()
+  }
 })
 
 const loadCycleReference = async () => {
@@ -709,6 +821,79 @@ const loadCycleReference = async () => {
   }
 }
 
+const loadCycleRuleMatch = async () => {
+  if (!form.typeCode) {
+    cycleRuleMatchData.value = null
+    return
+  }
+  cycleRuleMatchLoading.value = true
+  try {
+    const params = {
+      typeCode: form.typeCode,
+      instrument: form.instrument,
+      specification: form.specification
+    }
+    if (useManualCycle.value && form.standardCycle > 0) {
+      params.manualCycle = form.standardCycle
+    }
+    const res = await accessoryApi.getCycleRuleMatch(params)
+    if (res && res.data) {
+      cycleRuleMatchData.value = res.data
+      if (!useManualCycle.value && res.data.matchedCycle && dialogMode.value === 'add') {
+        form.standardCycle = res.data.matchedCycle
+      }
+    } else {
+      cycleRuleMatchData.value = null
+    }
+  } catch (e) {
+    cycleRuleMatchData.value = null
+  } finally {
+    cycleRuleMatchLoading.value = false
+  }
+}
+
+const loadCompatibilityCheck = async () => {
+  if (!form.typeCode) {
+    compatibilityData.value = null
+    return
+  }
+  compatibilityLoading.value = true
+  try {
+    const res = await accessoryApi.checkCompatibility({
+      typeCode: form.typeCode,
+      instrument: form.instrument,
+      specification: form.specification
+    })
+    if (res && res.data) {
+      compatibilityData.value = res.data
+    } else {
+      compatibilityData.value = null
+    }
+  } catch (e) {
+    compatibilityData.value = null
+  } finally {
+    compatibilityLoading.value = false
+  }
+}
+
+const handleUseManualCycleChange = (val) => {
+  if (!val) {
+    useManualCycle.value = false
+    loadCycleRuleMatch()
+  } else {
+    useManualCycle.value = true
+    if (cycleRuleMatchData.value?.matchedCycle) {
+      loadCycleRuleMatch()
+    }
+  }
+}
+
+const applyCandidateRule = (rule) => {
+  form.standardCycle = rule.standardCycle
+  useManualCycle.value = true
+  ElMessage.success(`已应用周期：${rule.standardCycle}天`)
+}
+
 const getSuggestionTagType = (level) => {
   const map = { success: 'success', warning: 'warning', danger: 'danger', info: 'info' }
   return map[level] || 'info'
@@ -724,9 +909,12 @@ const getDiffClass = (diff) => {
 const handleEdit = (row) => {
   dialogMode.value = 'edit'
   Object.assign(form, row)
+  useManualCycle.value = true
   dialogVisible.value = true
   nextTick(() => {
     loadCycleReference()
+    loadCycleRuleMatch()
+    loadCompatibilityCheck()
   })
 }
 
@@ -1372,6 +1560,251 @@ onMounted(() => {
       font-size: 13px;
       border-radius: 6px;
       line-height: 1.5;
+
+      .el-icon {
+        font-size: 16px;
+        flex-shrink: 0;
+      }
+    }
+  }
+}
+
+.cycle-rule-match-panel {
+  margin-top: 8px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #7dd3fc;
+  border-radius: 8px;
+
+  .reference-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0284c7;
+    margin-bottom: 12px;
+
+    .el-icon {
+      font-size: 16px;
+    }
+  }
+
+  .match-result-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding: 12px;
+    background: #fff;
+    border-radius: 6px;
+    border: 1px solid #bae6fd;
+  }
+
+  .match-result-main {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+
+  .match-cycle-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #0369a1;
+  }
+
+  .match-cycle-unit {
+    font-size: 14px;
+    color: #0369a1;
+    font-weight: 500;
+  }
+
+  .match-cycle-label {
+    font-size: 12px;
+    color: #64748b;
+    margin-left: 8px;
+  }
+
+  .match-detail {
+    font-size: 13px;
+    color: #475569;
+    margin-bottom: 10px;
+
+    .match-detail-label {
+      color: #64748b;
+      margin-right: 4px;
+    }
+
+    .match-detail-value {
+      font-weight: 500;
+      color: #334155;
+    }
+  }
+
+  .match-suggestion {
+    margin-bottom: 12px;
+
+    .suggestion-tag {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 12px;
+      font-size: 13px;
+      border-radius: 6px;
+      line-height: 1.5;
+      background: #fff;
+      border-color: #7dd3fc;
+      color: #0369a1;
+
+      .el-icon {
+        font-size: 16px;
+        flex-shrink: 0;
+      }
+    }
+  }
+
+  .candidate-rules {
+    .candidate-title {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+
+    .candidate-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .candidate-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 16px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        border-color: #0ea5e9;
+        background: #f0f9ff;
+        transform: translateY(-1px);
+      }
+
+      .candidate-cycle {
+        font-weight: 600;
+        color: #0369a1;
+      }
+
+      .candidate-desc {
+        color: #64748b;
+      }
+    }
+  }
+}
+
+.compatibility-panel {
+  margin-top: 8px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1px solid #86efac;
+  border-radius: 8px;
+
+  .reference-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #15803d;
+    margin-bottom: 12px;
+
+    .el-icon {
+      font-size: 16px;
+    }
+
+    .compatibility-tag {
+      margin-left: auto;
+    }
+  }
+
+  &.has-error {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border-color: #fca5a5;
+
+    .reference-panel-header {
+      color: #dc2626;
+    }
+  }
+
+  &.has-warning {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    border-color: #fcd34d;
+
+    .reference-panel-header {
+      color: #b45309;
+    }
+  }
+
+  .compatibility-summary {
+    font-size: 14px;
+    font-weight: 500;
+    color: #334155;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: #fff;
+    border-radius: 6px;
+    border-left: 3px solid #22c55e;
+  }
+
+  .compatibility-issues {
+    margin-bottom: 12px;
+  }
+
+  .issue-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+
+    .el-icon {
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    &.error-item {
+      border-left: 3px solid #ef4444;
+      color: #991b1b;
+    }
+
+    &.warning-item {
+      border-left: 3px solid #f59e0b;
+      color: #92400e;
+    }
+  }
+
+  .compatibility-suggestion {
+    .suggestion-tag {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 12px;
+      font-size: 13px;
+      border-radius: 6px;
+      line-height: 1.5;
+      background: #fff;
+      border-color: #86efac;
+      color: #15803d;
 
       .el-icon {
         font-size: 16px;

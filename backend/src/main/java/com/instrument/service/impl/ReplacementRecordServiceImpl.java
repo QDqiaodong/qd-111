@@ -11,6 +11,7 @@ import com.instrument.entity.ReplacementRecord;
 import com.instrument.mapper.AccessoryMapper;
 import com.instrument.mapper.ReplacementRecordMapper;
 import com.instrument.service.ReplacementRecordService;
+import com.instrument.service.StandardCycleRuleService;
 import com.instrument.vo.ReplacementTimelineItemVO;
 import com.instrument.vo.ReplacementTimelineVO;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
 
     private final ReplacementRecordMapper recordMapper;
     private final AccessoryMapper accessoryMapper;
+    private final StandardCycleRuleService cycleRuleService;
 
     @Override
     public PageResult<ReplacementRecord> page(ReplacementQueryDTO query) {
@@ -237,7 +239,16 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
             entity.setSpecification(accessory.getSpecification());
             entity.setInstrumentName(accessory.getInstrumentName());
             entity.setImageUrl(accessory.getImageUrl());
-            entity.setStandardCycle(accessory.getStandardCycle());
+
+            Integer standardCycle = accessory.getStandardCycle();
+            if (standardCycle == null || standardCycle <= 0) {
+                standardCycle = cycleRuleService.getMatchedCycle(
+                        accessory.getTypeCode(),
+                        accessory.getInstrument(),
+                        accessory.getSpecification()
+                );
+            }
+            entity.setStandardCycle(standardCycle);
         }
     }
 

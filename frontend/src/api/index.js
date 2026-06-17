@@ -13,7 +13,20 @@ export const accessoryApi = {
   listLifecycle: (params) => request.get('/accessory/lifecycle', { params }),
   getCycleReference: (params) => request.get('/accessory/cycle-reference', { params }),
   getCalendarMonth: (params) => request.get('/accessory/calendar/month', { params }),
-  getCalendarDay: (params) => request.get('/accessory/calendar/day', { params })
+  getCalendarDay: (params) => request.get('/accessory/calendar/day', { params }),
+  getCycleRuleMatch: (params) => request.get('/accessory/cycle-rule-match', { params }),
+  checkCompatibility: (params) => request.get('/accessory/compatibility-check', { params })
+}
+
+export const cycleRuleApi = {
+  page: (params) => request.get('/cycle-rule/page', { params }),
+  list: (params) => request.get('/cycle-rule/list', { params }),
+  getById: (id) => request.get(`/cycle-rule/${id}`),
+  add: (data) => request.post('/cycle-rule', data),
+  update: (data) => request.put('/cycle-rule', data),
+  remove: (ids) => request.delete('/cycle-rule', { data: { ids } }),
+  match: (params) => request.get('/cycle-rule/match', { params }),
+  getCandidates: (params) => request.get('/cycle-rule/candidates', { params })
 }
 
 export const replacementApi = {

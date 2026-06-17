@@ -10,10 +10,14 @@ import com.instrument.entity.Accessory;
 import com.instrument.entity.ReplacementRecord;
 import com.instrument.mapper.AccessoryMapper;
 import com.instrument.mapper.ReplacementRecordMapper;
+import com.instrument.service.AccessoryCompatibilityService;
 import com.instrument.service.AccessoryService;
 import com.instrument.service.DictService;
+import com.instrument.service.StandardCycleRuleService;
+import com.instrument.vo.AccessoryCompatibilityVO;
 import com.instrument.vo.AccessoryLifecycleVO;
 import com.instrument.vo.CycleReferenceVO;
+import com.instrument.vo.CycleRuleMatchVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -37,6 +41,8 @@ public class AccessoryServiceImpl implements AccessoryService {
     private final AccessoryMapper accessoryMapper;
     private final ReplacementRecordMapper replacementRecordMapper;
     private final DictService dictService;
+    private final StandardCycleRuleService cycleRuleService;
+    private final AccessoryCompatibilityService compatibilityService;
 
     @Override
     public PageResult<Accessory> page(AccessoryQueryDTO query) {
@@ -69,8 +75,9 @@ public class AccessoryServiceImpl implements AccessoryService {
         Accessory entity = new Accessory();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
-        if (entity.getStandardCycle() == null) {
-            entity.setStandardCycle(dictService.getStandardCycle(dto.getTypeCode()));
+        if (entity.getStandardCycle() == null || entity.getStandardCycle() <= 0) {
+            Integer matchedCycle = cycleRuleService.getMatchedCycle(dto.getTypeCode(), dto.getInstrument(), dto.getSpecification());
+            entity.setStandardCycle(matchedCycle);
         }
         return accessoryMapper.insert(entity) > 0;
     }
@@ -84,7 +91,8 @@ public class AccessoryServiceImpl implements AccessoryService {
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
         if (entity.getStandardCycle() == null || entity.getStandardCycle() <= 0) {
-            entity.setStandardCycle(dictService.getStandardCycle(dto.getTypeCode()));
+            Integer matchedCycle = cycleRuleService.getMatchedCycle(dto.getTypeCode(), dto.getInstrument(), dto.getSpecification());
+            entity.setStandardCycle(matchedCycle);
         }
         return accessoryMapper.updateById(entity) > 0;
     }
@@ -586,5 +594,15 @@ public class AccessoryServiceImpl implements AccessoryService {
         vo.setStatus(status);
         vo.setStatusLabel(statusLabel);
         return vo;
+    }
+
+    @Override
+    public com.instrument.vo.CycleRuleMatchVO getMatchedCycleRule(String typeCode, String instrument, String specification, Integer manualCycle) {
+        return cycleRuleService.matchRule(typeCode, instrument, specification, manualCycle);
+    }
+
+    @Override
+    public com.instrument.vo.AccessoryCompatibilityVO checkCompatibility(String typeCode, String instrument, String specification) {
+        return compatibilityService.checkCompatibility(typeCode, instrument, specification);
     }
 }

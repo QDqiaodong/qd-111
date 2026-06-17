@@ -139,4 +139,21 @@ public class AccessoryController {
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         return Result.success(accessoryService.getCalendarDay(date));
     }
+
+    @GetMapping("/cycle-rule-match")
+    public Result<com.instrument.vo.CycleRuleMatchVO> getMatchedCycleRule(
+            @RequestParam String typeCode,
+            @RequestParam(required = false) String instrument,
+            @RequestParam(required = false) String specification,
+            @RequestParam(required = false) Integer manualCycle) {
+        return Result.success(accessoryService.getMatchedCycleRule(typeCode, instrument, specification, manualCycle));
+    }
+
+    @GetMapping("/compatibility-check")
+    public Result<com.instrument.vo.AccessoryCompatibilityVO> checkCompatibility(
+            @RequestParam String typeCode,
+            @RequestParam(required = false) String instrument,
+            @RequestParam(required = false) String specification) {
+        return Result.success(accessoryService.checkCompatibility(typeCode, instrument, specification));
+    }
 }

@@ -2,7 +2,7 @@
   <el-container class="layout-container">
     <el-aside :width="collapse ? '64px' : '220px'" class="aside">
       <div class="logo">
-        <el-icon :size="24" color="#fff"><Music /></el-icon>
+        <el-icon :size="24" color="#fff"><Headset /></el-icon>
         <span v-show="!collapse" class="logo-text">乐器配件管理</span>
       </div>
       <el-menu
@@ -78,7 +78,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Calendar } from '@element-plus/icons-vue'
+import { Headset, DataAnalysis, Goods, RefreshRight, Warning, Grid, Folder, Calendar } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const collapse = ref(false)

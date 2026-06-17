@@ -24,12 +24,12 @@ export default defineConfig(({ mode }) => {
       }
     },
     server: {
-      host: '127.0.0.1',
-      port: 3008,
+      host: '0.0.0.0',
+      port: 5173,
       strictPort: true,
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8088',
+          target: 'http://127.0.0.1:19039',
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/api/, '')
         }
