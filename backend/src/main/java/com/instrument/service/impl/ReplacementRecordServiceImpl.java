@@ -138,7 +138,7 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
                 ReplacementRecord previous = allRecords.get(i - 1);
                 usageDays = (int) Math.max(ChronoUnit.DAYS.between(previous.getReplaceDate(), current.getReplaceDate()), 0);
             }
-            if (!usageDays.equals(current.getUsageDays())) {
+            if (current.getUsageDays() == null || usageDays != current.getUsageDays()) {
                 current.setUsageDays(usageDays);
                 recordMapper.updateById(current);
             }
