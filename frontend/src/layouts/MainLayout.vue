@@ -38,6 +38,10 @@
           <el-icon><Folder /></el-icon>
           <template #title>物资分组</template>
         </el-menu-item>
+        <el-menu-item index="/sets">
+          <el-icon><Box /></el-icon>
+          <template #title>套装档案</template>
+        </el-menu-item>
         <el-menu-item index="/group-display">
           <el-icon><Grid /></el-icon>
           <template #title>陈列看板</template>
@@ -78,7 +82,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Headset, DataAnalysis, Goods, RefreshRight, Warning, Grid, Folder, Calendar } from '@element-plus/icons-vue'
+import { Headset, DataAnalysis, Goods, RefreshRight, Warning, Grid, Folder, Calendar, Box } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const collapse = ref(false)

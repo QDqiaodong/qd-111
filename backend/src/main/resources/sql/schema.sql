@@ -156,3 +156,60 @@ INSERT INTO standard_cycle_rule (type_code, type_name, instrument, instrument_na
 ('strap', '背带', NULL, '通用', NULL, '背带通用周期', 730, 0, '背带通用默认周期'),
 ('cleaner', '清洁用品', NULL, '通用', NULL, '清洁用品通用周期', 180, 0, '清洁用品通用默认周期'),
 ('other', '其他', NULL, '通用', NULL, '其他配件通用周期', 365, 0, '其他配件通用默认周期');
+
+INSERT INTO accessory (name, type_code, type_name, specification, instrument, instrument_name, group_id, group_name, brand_model, standard_cycle, purchase_date, worn_status, remark) VALUES
+('木吉他拨片', 'pick', '拨片', '0.73mm 尼龙', 'guitar-acoustic', '木吉他', 1, '弹奏配件', 'Dunlop Tortex', 75, '2026-05-18', 'good', '中薄拨片'),
+('吉他背带', 'strap', '背带', '棉质 5cm 宽', 'guitar-acoustic', '木吉他', 2, '辅助工具', 'Ernie Ball', 730, '2025-12-01', 'good', '');
+
+DROP TABLE IF EXISTS accessory_set;
+CREATE TABLE accessory_set (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    name VARCHAR(100) NOT NULL COMMENT '套装名称',
+    instrument VARCHAR(50) NOT NULL COMMENT '适配乐器编码',
+    instrument_name VARCHAR(50) DEFAULT NULL COMMENT '适配乐器名称',
+    description VARCHAR(500) DEFAULT NULL COMMENT '套装说明',
+    cover_url VARCHAR(500) DEFAULT NULL COMMENT '封面URL',
+    status VARCHAR(20) DEFAULT 'enabled' COMMENT '状态 enabled-启用 disabled-停用',
+    item_count INT DEFAULT 0 COMMENT '配件项数量',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除 0-未删除 1-已删除',
+    PRIMARY KEY (id),
+    KEY idx_instrument (instrument),
+    KEY idx_name (name),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='套装耗材档案';
+
+DROP TABLE IF EXISTS accessory_set_item;
+CREATE TABLE accessory_set_item (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    set_id BIGINT NOT NULL COMMENT '套装ID',
+    accessory_id BIGINT NOT NULL COMMENT '配件ID',
+    accessory_name VARCHAR(100) DEFAULT NULL COMMENT '配件名称快照',
+    type_code VARCHAR(50) DEFAULT NULL COMMENT '配件类型编码',
+    type_name VARCHAR(50) DEFAULT NULL COMMENT '配件类型名称',
+    specification VARCHAR(500) DEFAULT NULL COMMENT '规格快照',
+    instrument VARCHAR(50) DEFAULT NULL COMMENT '适配乐器编码',
+    instrument_name VARCHAR(50) DEFAULT NULL COMMENT '适配乐器名称',
+    group_id BIGINT DEFAULT NULL COMMENT '所属分组ID',
+    group_name VARCHAR(50) DEFAULT NULL COMMENT '所属分组名称',
+    quantity INT DEFAULT 1 COMMENT '数量',
+    sort_order INT DEFAULT 0 COMMENT '排序',
+    remark VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除 0-未删除 1-已删除',
+    PRIMARY KEY (id),
+    KEY idx_set_id (set_id),
+    KEY idx_accessory_id (accessory_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='套装耗材明细';
+
+INSERT INTO accessory_set (name, instrument, instrument_name, description, status, item_count) VALUES
+('木吉他日常保养套装', 'guitar-acoustic', '木吉他', '木吉他日常弹奏与保养常用耗材组合', 'enabled', 5);
+
+INSERT INTO accessory_set_item (set_id, accessory_id, accessory_name, type_code, type_name, specification, instrument, instrument_name, group_id, group_name, quantity, sort_order, remark) VALUES
+(1, 1, '木吉他琴弦', 'string', '琴弦', '012-053 磷铜覆膜', 'guitar-acoustic', '木吉他', 1, '弹奏配件', 1, 1, '核心耗材'),
+(1, 7, '木吉他拨片', 'pick', '拨片', '0.73mm 尼龙', 'guitar-acoustic', '木吉他', 1, '弹奏配件', 5, 2, '消耗较快'),
+(1, 8, '吉他背带', 'strap', '背带', '棉质 5cm 宽', 'guitar-acoustic', '木吉他', 2, '辅助工具', 1, 3, ''),
+(1, 5, '吉他变调夹', 'capo', '变调夹', '弹簧式 金属款', 'guitar-acoustic', '木吉他', 2, '辅助工具', 1, 4, ''),
+(1, 6, '指板清洁剂', 'cleaner', '清洁用品', '柠檬油 100ml', 'guitar-acoustic', '木吉他', 3, '养护耗材', 1, 5, '养护必备');

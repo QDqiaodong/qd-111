@@ -37,6 +37,12 @@ const routes = [
         meta: { title: '物资分组归类' }
       },
       {
+        path: 'sets',
+        name: 'Sets',
+        component: () => import('@/views/Sets.vue'),
+        meta: { title: '套装耗材档案' }
+      },
+      {
         path: 'spec-comparison',
         name: 'SpecComparison',
         component: () => import('@/views/SpecComparison.vue'),

@@ -58,6 +58,16 @@ export const groupApi = {
   healthScores: () => request.get('/group/health-scores')
 }
 
+export const setApi = {
+  page: (params) => request.get('/accessory-set/page', { params }),
+  list: (params) => request.get('/accessory-set/list', { params }),
+  getById: (id) => request.get(`/accessory-set/${id}`),
+  add: (data) => request.post('/accessory-set', data),
+  update: (data) => request.put('/accessory-set', data),
+  remove: (ids) => request.delete('/accessory-set', { data: { ids } }),
+  updateStatus: (id, status) => request.patch(`/accessory-set/${id}/status`, { status })
+}
+
 export const dictApi = {
   accessoryTypes: () => request.get('/dict/accessory-types'),
   instruments: () => request.get('/dict/instruments'),
