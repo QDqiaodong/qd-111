@@ -52,4 +52,7 @@ public class Accessory implements Serializable {
     @TableLogic
     @TableField(fill = FieldFill.INSERT)
     private Integer deleted;
+
+    @TableField(exist = false)
+    private Integer usageDays;
 }

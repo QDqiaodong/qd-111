@@ -143,7 +143,7 @@
         <el-table-column prop="purchaseDate" label="购入时间" width="120" />
         <el-table-column label="使用状态" width="140">
           <template #default="{ row }">
-            <span v-if="row.usageDays">
+            <span v-if="row.usageDays != null && row.usageDays !== undefined">
               <el-tag size="small" type="info">已使用 {{ row.usageDays }} 天</el-tag>
             </span>
             <span v-else>

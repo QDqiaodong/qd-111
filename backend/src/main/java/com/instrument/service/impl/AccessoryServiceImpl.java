@@ -52,6 +52,7 @@ public class AccessoryServiceImpl implements AccessoryService {
         wrapper.orderByDesc(Accessory::getCreateTime);
         IPage<Accessory> page = accessoryMapper.selectPage(
                 new Page<>(query.getPageNum(), query.getPageSize()), wrapper);
+        fillUsageDays(page.getRecords());
         return PageResult.of(page);
     }
 
@@ -60,13 +61,55 @@ public class AccessoryServiceImpl implements AccessoryService {
     public List<Accessory> list(AccessoryQueryDTO query) {
         LambdaQueryWrapper<Accessory> wrapper = buildWrapper(query);
         wrapper.orderByDesc(Accessory::getCreateTime);
-        return accessoryMapper.selectList(wrapper);
+        List<Accessory> list = accessoryMapper.selectList(wrapper);
+        fillUsageDays(list);
+        return list;
+    }
+
+    private void fillUsageDays(List<Accessory> accessories) {
+        if (accessories == null || accessories.isEmpty()) {
+            return;
+        }
+        List<Long> accessoryIds = accessories.stream()
+                .map(Accessory::getId)
+                .collect(Collectors.toList());
+        LambdaQueryWrapper<ReplacementRecord> recordWrapper = new LambdaQueryWrapper<>();
+        recordWrapper.in(ReplacementRecord::getAccessoryId, accessoryIds);
+        recordWrapper.isNotNull(ReplacementRecord::getReplaceDate);
+        List<ReplacementRecord> allRecords = replacementRecordMapper.selectList(recordWrapper);
+        Map<Long, List<ReplacementRecord>> recordMap = allRecords.stream()
+                .collect(Collectors.groupingBy(ReplacementRecord::getAccessoryId));
+        LocalDate today = LocalDate.now();
+        for (Accessory acc : accessories) {
+            List<ReplacementRecord> records = recordMap.get(acc.getId());
+            LocalDate baselineDate = null;
+            if (records != null && !records.isEmpty()) {
+                baselineDate = records.stream()
+                        .map(ReplacementRecord::getReplaceDate)
+                        .filter(Objects::nonNull)
+                        .max(LocalDate::compareTo)
+                        .orElse(null);
+            }
+            if (baselineDate == null) {
+                baselineDate = acc.getPurchaseDate();
+            }
+            if (baselineDate != null) {
+                int usageDays = (int) Math.max(ChronoUnit.DAYS.between(baselineDate, today), 0);
+                acc.setUsageDays(usageDays);
+            } else {
+                acc.setUsageDays(0);
+            }
+        }
     }
 
     @Override
     @Cacheable(value = "accessory", key = "#id", unless = "#result == null")
     public Accessory getById(Long id) {
-        return accessoryMapper.selectById(id);
+        Accessory accessory = accessoryMapper.selectById(id);
+        if (accessory != null) {
+            fillUsageDays(Collections.singletonList(accessory));
+        }
+        return accessory;
     }
 
     @Override
@@ -128,6 +171,13 @@ public class AccessoryServiceImpl implements AccessoryService {
     @Transactional
     @CacheEvict(value = "accessory", allEntries = true)
     public boolean remove(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return false;
+        }
+        LambdaQueryWrapper<ReplacementRecord> recordWrapper = new LambdaQueryWrapper<>();
+        recordWrapper.in(ReplacementRecord::getAccessoryId, ids);
+        int deletedRecords = replacementRecordMapper.delete(recordWrapper);
+        log.info("删除配件前级联删除更换记录，配件数={}, 删除记录数={}", ids.size(), deletedRecords);
         return accessoryMapper.deleteBatchIds(ids) > 0;
     }
 
