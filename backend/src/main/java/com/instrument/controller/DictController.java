@@ -2,6 +2,7 @@ package com.instrument.controller;
 
 import com.instrument.common.Result;
 import com.instrument.service.DictService;
+import com.instrument.vo.DictSnapshotVO;
 import com.instrument.vo.DictVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,5 +36,10 @@ public class DictController {
     @GetMapping("/replacement-cycles")
     public Result<List<DictVO>> replacementCycles() {
         return Result.success(dictService.replacementCycles());
+    }
+
+    @GetMapping("/snapshot")
+    public Result<DictSnapshotVO> snapshot() {
+        return Result.success(dictService.snapshot());
     }
 }

@@ -8,6 +8,7 @@ import com.instrument.mapper.AccessoryGroupMapper;
 import com.instrument.mapper.AccessoryMapper;
 import com.instrument.mapper.ReplacementRecordMapper;
 import com.instrument.service.AccessoryGroupService;
+import com.instrument.vo.GroupCapacityStatsVO;
 import com.instrument.vo.GroupHealthScoreVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -90,6 +91,82 @@ public class AccessoryGroupServiceImpl implements AccessoryGroupService {
     public List<GroupHealthScoreVO> healthScores() {
         List<AccessoryGroup> groups = list();
         return groups.stream().map(this::calculateHealthScore).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<GroupCapacityStatsVO> capacityStats() {
+        List<AccessoryGroup> groups = list();
+        return groups.stream().map(this::calculateCapacityStats).collect(Collectors.toList());
+    }
+
+    private GroupCapacityStatsVO calculateCapacityStats(AccessoryGroup group) {
+        Long groupId = group.getId();
+        LocalDate today = LocalDate.now();
+
+        List<Accessory> accessories = accessoryMapper.selectList(
+                new LambdaQueryWrapper<Accessory>().eq(Accessory::getGroupId, groupId)
+        );
+
+        int totalCount = accessories.size();
+        int severeCount = (int) accessories.stream()
+                .filter(a -> "severe".equals(a.getWornStatus())).count();
+        int brokenCount = (int) accessories.stream()
+                .filter(a -> "broken".equals(a.getWornStatus())).count();
+
+        int maxUnreplacedDays = 0;
+        LocalDate lastReplacementDate = null;
+
+        List<Long> accessoryIds = accessories.stream()
+                .map(Accessory::getId).collect(Collectors.toList());
+
+        if (!accessoryIds.isEmpty()) {
+            List<ReplacementRecord> allRecords = recordMapper.selectList(
+                    new LambdaQueryWrapper<ReplacementRecord>()
+                            .in(ReplacementRecord::getAccessoryId, accessoryIds)
+                            .orderByDesc(ReplacementRecord::getReplaceDate)
+            );
+
+            Map<Long, LocalDate> lastReplaceMap = new HashMap<>();
+            for (ReplacementRecord record : allRecords) {
+                if (!lastReplaceMap.containsKey(record.getAccessoryId())) {
+                    lastReplaceMap.put(record.getAccessoryId(), record.getReplaceDate());
+                }
+            }
+
+            for (Accessory acc : accessories) {
+                LocalDate lastDate = lastReplaceMap.getOrDefault(acc.getId(), acc.getPurchaseDate());
+                if (lastDate != null) {
+                    long days = ChronoUnit.DAYS.between(lastDate, today);
+                    if (days > maxUnreplacedDays) {
+                        maxUnreplacedDays = (int) days;
+                    }
+                }
+            }
+
+            if (!allRecords.isEmpty()) {
+                lastReplacementDate = allRecords.get(0).getReplaceDate();
+            } else {
+                for (Accessory acc : accessories) {
+                    if (acc.getPurchaseDate() != null) {
+                        if (lastReplacementDate == null || acc.getPurchaseDate().isAfter(lastReplacementDate)) {
+                            lastReplacementDate = acc.getPurchaseDate();
+                        }
+                    }
+                }
+            }
+        }
+
+        GroupCapacityStatsVO vo = new GroupCapacityStatsVO();
+        vo.setGroupId(groupId);
+        vo.setGroupName(group.getName());
+        vo.setSortOrder(group.getSortOrder());
+        vo.setTotalCount(totalCount);
+        vo.setSevereCount(severeCount);
+        vo.setBrokenCount(brokenCount);
+        vo.setMaxUnreplacedDays(maxUnreplacedDays);
+        vo.setLastReplacementDate(lastReplacementDate);
+
+        return vo;
     }
 
     private GroupHealthScoreVO calculateHealthScore(AccessoryGroup group) {

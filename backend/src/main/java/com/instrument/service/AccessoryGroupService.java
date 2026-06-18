@@ -1,6 +1,7 @@
 package com.instrument.service;
 
 import com.instrument.entity.AccessoryGroup;
+import com.instrument.vo.GroupCapacityStatsVO;
 import com.instrument.vo.GroupHealthScoreVO;
 
 import java.util.List;
@@ -20,4 +21,6 @@ public interface AccessoryGroupService {
     GroupHealthScoreVO healthScore(Long groupId);
 
     List<GroupHealthScoreVO> healthScores();
+
+    List<GroupCapacityStatsVO> capacityStats();
 }

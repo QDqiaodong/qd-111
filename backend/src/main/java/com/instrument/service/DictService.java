@@ -1,5 +1,6 @@
 package com.instrument.service;
 
+import com.instrument.vo.DictSnapshotVO;
 import com.instrument.vo.DictVO;
 
 import java.util.List;
@@ -21,4 +22,6 @@ public interface DictService {
     String getWornStatusLabel(String code);
 
     Integer getStandardCycle(String accessoryType);
+
+    DictSnapshotVO snapshot();
 }

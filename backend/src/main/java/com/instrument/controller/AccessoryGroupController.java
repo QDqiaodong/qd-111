@@ -3,6 +3,7 @@ package com.instrument.controller;
 import com.instrument.common.Result;
 import com.instrument.entity.AccessoryGroup;
 import com.instrument.service.AccessoryGroupService;
+import com.instrument.vo.GroupCapacityStatsVO;
 import com.instrument.vo.GroupHealthScoreVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,11 @@ public class AccessoryGroupController {
     @GetMapping("/health-scores")
     public Result<List<GroupHealthScoreVO>> healthScores() {
         return Result.success(groupService.healthScores());
+    }
+
+    @GetMapping("/capacity-stats")
+    public Result<List<GroupCapacityStatsVO>> capacityStats() {
+        return Result.success(groupService.capacityStats());
     }
 
     @PostMapping
