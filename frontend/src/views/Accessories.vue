@@ -489,7 +489,8 @@
                     <div class="timeline-value">
                       <span :style="{ color: getStageColor(lifecycleData.stage) }">{{ lifecycleData.usedDays }}</span> 天
                       <span class="timeline-sub" v-if="lifecycleData.daysLeft > 0">（剩余 {{ lifecycleData.daysLeft }} 天）</span>
-                      <span class="timeline-sub timeline-sub-danger" v-else>（已超期 {{ Math.abs(lifecycleData.daysLeft) }} 天）</span>
+                      <span class="timeline-sub timeline-sub-danger" v-else-if="lifecycleData.daysLeft < 0">（已超期 {{ Math.abs(lifecycleData.daysLeft) }} 天）</span>
+                      <span class="timeline-sub" v-else>（已达标准周期）</span>
                     </div>
                   </div>
                 </div>
@@ -948,7 +949,7 @@ const computeLifecycleLocal = (row) => {
   const standardCycle = row.standardCycle || 0
   const usedDays = purchaseDate ? dayjs().diff(purchaseDate, 'day') : 0
   const cyclePercent = standardCycle > 0 ? Math.min(Math.round((usedDays / standardCycle) * 100), 100) : 0
-  const daysLeft = standardCycle > 0 ? Math.max(standardCycle - usedDays, 0) : 0
+  const daysLeft = standardCycle > 0 ? standardCycle - usedDays : 0
   let lastReplaceDate = null
   if (replacementHistory.value.length > 0) {
     const sorted = [...replacementHistory.value].sort((a, b) => dayjs(b.replaceDate).valueOf() - dayjs(a.replaceDate).valueOf())

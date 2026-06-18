@@ -300,7 +300,7 @@ public class AccessoryServiceImpl implements AccessoryService {
         RiskLevelCalculator.RiskResult riskResult = RiskLevelCalculator.calculate(accessory, history);
         vo.setUsedDays(riskResult.getUsageDays() != null ? riskResult.getUsageDays() : 0);
         vo.setCyclePercent(riskResult.getCyclePercent() != null ? riskResult.getCyclePercent() : 0);
-        vo.setDaysLeft(riskResult.getDaysLeft() != null ? Math.max(riskResult.getDaysLeft(), 0) : 0);
+        vo.setDaysLeft(riskResult.getDaysLeft());
 
         vo.setRiskLevel(riskResult.getRiskLevel());
         vo.setRiskLabel(riskResult.getRiskLabel());
