@@ -313,7 +313,10 @@ const filteredGroups = computed(() => {
     )
   }
   if (filters.wornStatus) {
-    groups = groups.filter(g => g.mostWornStatus === filters.wornStatus)
+    groups = groups.filter(g => {
+      const wornItem = g.wornDistribution.find(w => w.code === filters.wornStatus)
+      return wornItem && wornItem.count > 0
+    })
   }
   return groups
 })
