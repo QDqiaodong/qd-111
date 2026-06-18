@@ -9,14 +9,17 @@ import com.instrument.dto.StandardCycleRuleDTO;
 import com.instrument.entity.StandardCycleRule;
 import com.instrument.mapper.StandardCycleRuleMapper;
 import com.instrument.service.DictService;
+import com.instrument.service.ReplacementRecordService;
 import com.instrument.service.StandardCycleRuleService;
 import com.instrument.vo.CycleRuleMatchVO;
 import com.instrument.vo.StandardCycleRuleVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -24,15 +27,26 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class StandardCycleRuleServiceImpl implements StandardCycleRuleService {
 
     private final StandardCycleRuleMapper ruleMapper;
     private final DictService dictService;
+    private final ReplacementRecordService replacementRecordService;
+
+    @Autowired
+    public StandardCycleRuleServiceImpl(
+            StandardCycleRuleMapper ruleMapper,
+            DictService dictService,
+            @Lazy ReplacementRecordService replacementRecordService) {
+        this.ruleMapper = ruleMapper;
+        this.dictService = dictService;
+        this.replacementRecordService = replacementRecordService;
+    }
 
     @Override
     public PageResult<StandardCycleRule> page(CycleRuleQueryDTO query) {
@@ -73,7 +87,12 @@ public class StandardCycleRuleServiceImpl implements StandardCycleRuleService {
         if (entity.getEnabled() == null) {
             entity.setEnabled(1);
         }
-        return ruleMapper.insert(entity) > 0;
+        boolean result = ruleMapper.insert(entity) > 0;
+        if (result && entity.getEnabled() != null && entity.getEnabled() == 1) {
+            log.info("新增周期规则[typeCode={}, instrument={}]，触发关联配件重算", entity.getTypeCode(), entity.getInstrument());
+            triggerRecalculate(entity.getTypeCode(), entity.getInstrument());
+        }
+        return result;
     }
 
     @Override
@@ -81,17 +100,56 @@ public class StandardCycleRuleServiceImpl implements StandardCycleRuleService {
     @CacheEvict(value = "cycleRule", allEntries = true)
     public boolean update(StandardCycleRuleDTO dto) {
         validateStandardCycle(dto.getStandardCycle());
+        StandardCycleRule existing = ruleMapper.selectById(dto.getId());
+        boolean keyFieldsChanged = existing != null
+                && (!Objects.equals(existing.getTypeCode(), dto.getTypeCode())
+                    || !Objects.equals(existing.getInstrument(), dto.getInstrument())
+                    || !Objects.equals(existing.getStandardCycle(), dto.getStandardCycle())
+                    || !Objects.equals(existing.getEnabled(), dto.getEnabled())
+                    || !Objects.equals(existing.getSpecPattern(), dto.getSpecPattern()));
+
         StandardCycleRule entity = new StandardCycleRule();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
-        return ruleMapper.updateById(entity) > 0;
+        boolean result = ruleMapper.updateById(entity) > 0;
+
+        if (result && keyFieldsChanged) {
+            log.info("周期规则[{}]关键字段变更，触发关联配件重算", dto.getId());
+            if (existing != null) {
+                triggerRecalculate(existing.getTypeCode(), existing.getInstrument());
+            }
+            triggerRecalculate(entity.getTypeCode(), entity.getInstrument());
+        }
+        return result;
     }
 
     @Override
     @Transactional
     @CacheEvict(value = "cycleRule", allEntries = true)
     public boolean remove(List<Long> ids) {
-        return ruleMapper.deleteBatchIds(ids) > 0;
+        List<StandardCycleRule> rulesToRemove = new ArrayList<>();
+        for (Long id : ids) {
+            StandardCycleRule rule = ruleMapper.selectById(id);
+            if (rule != null) {
+                rulesToRemove.add(rule);
+            }
+        }
+        boolean result = ruleMapper.deleteBatchIds(ids) > 0;
+        if (result) {
+            for (StandardCycleRule rule : rulesToRemove) {
+                log.info("删除周期规则[typeCode={}, instrument={}]，触发关联配件重算", rule.getTypeCode(), rule.getInstrument());
+                triggerRecalculate(rule.getTypeCode(), rule.getInstrument());
+            }
+        }
+        return result;
+    }
+
+    private void triggerRecalculate(String typeCode, String instrument) {
+        try {
+            replacementRecordService.recalculateByCondition(typeCode, instrument);
+        } catch (Exception e) {
+            log.error("周期规则变更触发重算失败[typeCode={}, instrument={}]", typeCode, instrument, e);
+        }
     }
 
     @Override

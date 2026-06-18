@@ -25,4 +25,12 @@ public interface ReplacementRecordService {
     boolean remove(List<Long> ids);
 
     List<ReplacementTimelineVO> timeline(ReplacementQueryDTO query);
+
+    void recalculateByAccessory(Long accessoryId);
+
+    void recalculateByAccessoryIds(List<Long> accessoryIds);
+
+    void recalculateByAccessoryWithStandardCycle(Long accessoryId);
+
+    void recalculateByCondition(String typeCode, String instrument);
 }

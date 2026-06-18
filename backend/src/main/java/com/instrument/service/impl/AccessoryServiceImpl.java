@@ -44,6 +44,7 @@ public class AccessoryServiceImpl implements AccessoryService {
     private final DictService dictService;
     private final StandardCycleRuleService cycleRuleService;
     private final AccessoryCompatibilityService compatibilityService;
+    private final com.instrument.service.ReplacementRecordService replacementRecordService;
 
     @Override
     public PageResult<Accessory> page(AccessoryQueryDTO query) {
@@ -90,6 +91,17 @@ public class AccessoryServiceImpl implements AccessoryService {
     public boolean update(AccessoryDTO dto) {
         validateWornStatus(dto.getWornStatus());
         validateStandardCycle(dto.getStandardCycle());
+
+        Accessory existing = accessoryMapper.selectById(dto.getId());
+        boolean purchaseDateChanged = existing != null
+                && !Objects.equals(existing.getPurchaseDate(), dto.getPurchaseDate());
+        boolean standardCycleChanged = existing != null
+                && !Objects.equals(existing.getStandardCycle(), dto.getStandardCycle());
+        boolean typeOrInstrumentChanged = existing != null
+                && (!Objects.equals(existing.getTypeCode(), dto.getTypeCode())
+                    || !Objects.equals(existing.getInstrument(), dto.getInstrument())
+                    || !Objects.equals(existing.getSpecification(), dto.getSpecification()));
+
         Accessory entity = new Accessory();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
@@ -97,7 +109,19 @@ public class AccessoryServiceImpl implements AccessoryService {
             Integer matchedCycle = cycleRuleService.getMatchedCycle(dto.getTypeCode(), dto.getInstrument(), dto.getSpecification());
             entity.setStandardCycle(matchedCycle);
         }
-        return accessoryMapper.updateById(entity) > 0;
+        boolean result = accessoryMapper.updateById(entity) > 0;
+
+        if (result && dto.getId() != null) {
+            if (purchaseDateChanged) {
+                log.info("配件[{}]采购日期变更，触发更换记录重算", dto.getId());
+                replacementRecordService.recalculateByAccessory(dto.getId());
+            } else if (standardCycleChanged || typeOrInstrumentChanged) {
+                log.info("配件[{}]标准周期/类型/乐器/规格变更，触发更换记录重算(含标准周期)", dto.getId());
+                replacementRecordService.recalculateByAccessoryWithStandardCycle(dto.getId());
+            }
+        }
+
+        return result;
     }
 
     @Override

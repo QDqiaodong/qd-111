@@ -13,6 +13,26 @@
             <span>时间线视图</span>
           </el-radio-button>
         </el-radio-group>
+        <el-dropdown trigger="click" @command="handleRecalcCommand">
+          <el-button>
+            <el-icon><Refresh /></el-icon>
+            <span>重算使用天数</span>
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="all">
+                <el-icon><Refresh /></el-icon>全部重算（含标准周期）
+              </el-dropdown-item>
+              <el-dropdown-item command="usage">
+                <el-icon><Timer /></el-icon>仅重算使用天数
+              </el-dropdown-item>
+              <el-dropdown-item command="currentFilter" v-if="filters.accessoryId">
+                <el-icon><Goods /></el-icon>当前配件重算
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button type="primary" @click="handleAdd">
           <el-icon><Plus /></el-icon>登记更换
         </el-button>
@@ -277,7 +297,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { List, Clock, Plus, Goods, ChatDotRound } from '@element-plus/icons-vue'
+import { List, Clock, Plus, Goods, ChatDotRound, Refresh, ArrowDown, Timer } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { replacementApi, accessoryApi } from '@/api'
 import BatchActionBar from '@/components/BatchActionBar.vue'
@@ -575,6 +595,47 @@ const handleSubmit = async () => {
 
 const handleDialogClose = () => {
   resetForm()
+}
+
+const handleRecalcCommand = async (command) => {
+  try {
+    if (command === 'all') {
+      await ElMessageBox.confirm(
+        '确定要重算全部配件的使用天数和标准周期吗？\n这将基于最新的采购日期、标准周期规则重新计算所有历史记录。',
+        '全量重算确认',
+        { type: 'warning', confirmButtonText: '确认重算', cancelButtonText: '取消' }
+      )
+      await replacementApi.recalculateAll()
+      ElMessage.success('全量重算完成，已更新所有更换记录的使用天数和标准周期')
+    } else if (command === 'usage') {
+      await ElMessageBox.confirm(
+        '确定要重算全部配件的使用天数吗？\n将基于最新采购日期和更换日期重新计算（不更新标准周期）。',
+        '重算使用天数确认',
+        { type: 'warning', confirmButtonText: '确认重算', cancelButtonText: '取消' }
+      )
+      await replacementApi.recalculateByCondition()
+      ElMessage.success('使用天数重算完成')
+    } else if (command === 'currentFilter') {
+      if (!filters.accessoryId) {
+        ElMessage.warning('请先选择配件')
+        return
+      }
+      const acc = accessoryList.value.find(a => a.id === filters.accessoryId)
+      await ElMessageBox.confirm(
+        `确定要重算配件「${acc?.name || filters.accessoryId}」的所有更换记录吗？`,
+        '单个配件重算确认',
+        { type: 'warning', confirmButtonText: '确认重算', cancelButtonText: '取消' }
+      )
+      await replacementApi.recalculateByAccessory(filters.accessoryId, true)
+      ElMessage.success('该配件更换记录重算完成')
+    }
+    refreshCurrentView()
+    loadHistory()
+  } catch (e) {
+    if (e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '重算失败，请稍后重试')
+    }
+  }
 }
 
 const getUsageTagType = (row) => {

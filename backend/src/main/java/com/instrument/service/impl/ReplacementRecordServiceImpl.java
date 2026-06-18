@@ -24,8 +24,10 @@ import org.springframework.util.StringUtils;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -75,7 +77,7 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         calculateUsageDays(entity, dto.getAccessoryId(), null);
         boolean result = recordMapper.insert(entity) > 0;
         if (result) {
-            recalculateAllUsageDays(dto.getAccessoryId());
+            recalculateByAccessory(dto.getAccessoryId());
         }
         return result;
     }
@@ -89,7 +91,7 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         calculateUsageDays(entity, dto.getAccessoryId(), dto.getId());
         boolean result = recordMapper.updateById(entity) > 0;
         if (result) {
-            recalculateAllUsageDays(dto.getAccessoryId());
+            recalculateByAccessory(dto.getAccessoryId());
         }
         return result;
     }
@@ -100,25 +102,59 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         if (ids == null || ids.isEmpty()) {
             return false;
         }
-        List<Long> accessoryIds = new ArrayList<>();
+        Set<Long> accessoryIds = new HashSet<>();
         for (Long id : ids) {
             ReplacementRecord record = recordMapper.selectById(id);
             if (record != null && record.getAccessoryId() != null) {
-                if (!accessoryIds.contains(record.getAccessoryId())) {
-                    accessoryIds.add(record.getAccessoryId());
-                }
+                accessoryIds.add(record.getAccessoryId());
             }
         }
         boolean result = recordMapper.deleteBatchIds(ids) > 0;
         if (result) {
-            for (Long accessoryId : accessoryIds) {
-                recalculateAllUsageDays(accessoryId);
-            }
+            recalculateByAccessoryIds(new ArrayList<>(accessoryIds));
         }
         return result;
     }
 
-    private void recalculateAllUsageDays(Long accessoryId) {
+    @Override
+    public void recalculateByAccessory(Long accessoryId) {
+        recalculateAllUsageDaysAndCycle(accessoryId, false);
+    }
+
+    @Override
+    public void recalculateByAccessoryIds(List<Long> accessoryIds) {
+        if (accessoryIds == null || accessoryIds.isEmpty()) return;
+        for (Long accessoryId : accessoryIds) {
+            recalculateAllUsageDaysAndCycle(accessoryId, false);
+        }
+    }
+
+    @Override
+    public void recalculateByAccessoryWithStandardCycle(Long accessoryId) {
+        recalculateAllUsageDaysAndCycle(accessoryId, true);
+    }
+
+    @Override
+    public void recalculateByCondition(String typeCode, String instrument) {
+        LambdaQueryWrapper<Accessory> wrapper = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(typeCode)) {
+            wrapper.eq(Accessory::getTypeCode, typeCode);
+        }
+        if (StringUtils.hasText(instrument)) {
+            wrapper.and(w -> w
+                    .eq(Accessory::getInstrument, instrument)
+                    .or().isNull(Accessory::getInstrument));
+        }
+        List<Accessory> accessories = accessoryMapper.selectList(wrapper);
+        if (accessories == null || accessories.isEmpty()) return;
+        log.info("按条件重算更换记录，typeCode={}, instrument={}, 影响配件数={}", typeCode, instrument, accessories.size());
+        for (Accessory acc : accessories) {
+            recalculateAllUsageDaysAndCycle(acc.getId(), true);
+        }
+    }
+
+    @Transactional
+    public void recalculateAllUsageDaysAndCycle(Long accessoryId, boolean refreshStandardCycle) {
         if (accessoryId == null) return;
         List<ReplacementRecord> allRecords = history(accessoryId);
         if (allRecords.isEmpty()) return;
@@ -126,9 +162,23 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         allRecords.sort(Comparator.comparing(ReplacementRecord::getReplaceDate));
 
         Accessory accessory = accessoryMapper.selectById(accessoryId);
+        Integer accessoryStandardCycle = null;
+        if (accessory != null && refreshStandardCycle) {
+            accessoryStandardCycle = accessory.getStandardCycle();
+            if (accessoryStandardCycle == null || accessoryStandardCycle <= 0) {
+                accessoryStandardCycle = cycleRuleService.getMatchedCycle(
+                        accessory.getTypeCode(),
+                        accessory.getInstrument(),
+                        accessory.getSpecification()
+                );
+            }
+        }
 
+        int recalculatedCount = 0;
         for (int i = 0; i < allRecords.size(); i++) {
             ReplacementRecord current = allRecords.get(i);
+            boolean needUpdate = false;
+
             int usageDays;
             if (i == 0) {
                 if (accessory != null && accessory.getPurchaseDate() != null) {
@@ -142,8 +192,23 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
             }
             if (current.getUsageDays() == null || usageDays != current.getUsageDays()) {
                 current.setUsageDays(usageDays);
-                recordMapper.updateById(current);
+                needUpdate = true;
             }
+
+            if (refreshStandardCycle && accessoryStandardCycle != null) {
+                if (current.getStandardCycle() == null || !accessoryStandardCycle.equals(current.getStandardCycle())) {
+                    current.setStandardCycle(accessoryStandardCycle);
+                    needUpdate = true;
+                }
+            }
+
+            if (needUpdate) {
+                recordMapper.updateById(current);
+                recalculatedCount++;
+            }
+        }
+        if (recalculatedCount > 0) {
+            log.info("配件[{}]更换记录重算完成，更新记录数={}, 刷新标准周期={}", accessoryId, recalculatedCount, refreshStandardCycle);
         }
     }
 

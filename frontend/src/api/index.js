@@ -37,7 +37,14 @@ export const replacementApi = {
   add: (data) => request.post('/replacement', data),
   update: (data) => request.put('/replacement', data),
   remove: (ids) => request.delete('/replacement', { data: { ids } }),
-  history: (accessoryId) => request.get(`/replacement/history/${accessoryId}`)
+  history: (accessoryId) => request.get(`/replacement/history/${accessoryId}`),
+  recalculateByAccessory: (accessoryId, withStandardCycle = true) =>
+    request.post(`/replacement/recalculate/accessory/${accessoryId}`, null, { params: { withStandardCycle } }),
+  recalculateByAccessoryIds: (accessoryIds, withStandardCycle = true) =>
+    request.post('/replacement/recalculate/accessories', { accessoryIds, withStandardCycle }),
+  recalculateByCondition: (typeCode, instrument) =>
+    request.post('/replacement/recalculate/condition', { typeCode, instrument }),
+  recalculateAll: () => request.post('/replacement/recalculate/all')
 }
 
 export const groupApi = {

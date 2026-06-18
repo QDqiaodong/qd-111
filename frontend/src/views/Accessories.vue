@@ -907,6 +907,7 @@ const getDiffClass = (diff) => {
 
 const handleEdit = (row) => {
   dialogMode.value = 'edit'
+  originalRowForEdit.value = { ...row }
   Object.assign(form, row)
   useManualCycle.value = true
   dialogVisible.value = true
@@ -1067,6 +1068,8 @@ const handleBatchStatus = async (code) => {
   }
 }
 
+const originalRowForEdit = ref(null)
+
 const handleSubmit = async () => {
   await formRef.value.validate()
   if (!form.standardCycle || form.standardCycle <= 0) {
@@ -1074,13 +1077,33 @@ const handleSubmit = async () => {
   }
   submitting.value = true
   const originalForm = { ...form }
+
+  let changedFields = []
+  if (dialogMode.value === 'edit' && originalRowForEdit.value) {
+    const orig = originalRowForEdit.value
+    if (orig.purchaseDate !== form.purchaseDate) changedFields.push('采购日期')
+    if (orig.standardCycle !== form.standardCycle) changedFields.push('标准周期')
+    if (orig.typeCode !== form.typeCode) changedFields.push('配件类型')
+    if (orig.instrument !== form.instrument) changedFields.push('适配乐器')
+    if (orig.specification !== form.specification) changedFields.push('规格参数')
+  }
+
   try {
     if (dialogMode.value === 'add') {
       await accessoryApi.add(form)
+      ElMessage.success('保存成功')
     } else {
       await accessoryApi.update(form)
+      if (changedFields.length > 0) {
+        ElMessage.success({
+          message: `保存成功，已自动重算历史更换记录（变更：${changedFields.join('、')}）`,
+          duration: 3000,
+          showClose: true
+        })
+      } else {
+        ElMessage.success('保存成功')
+      }
     }
-    ElMessage.success('保存成功')
     dialogVisible.value = false
     loadList()
   } catch (err) {
