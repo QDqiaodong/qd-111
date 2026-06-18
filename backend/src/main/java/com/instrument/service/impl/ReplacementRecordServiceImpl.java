@@ -12,6 +12,7 @@ import com.instrument.mapper.AccessoryMapper;
 import com.instrument.mapper.ReplacementRecordMapper;
 import com.instrument.service.ReplacementRecordService;
 import com.instrument.service.StandardCycleRuleService;
+import com.instrument.vo.ReplacementResultVO;
 import com.instrument.vo.ReplacementTimelineItemVO;
 import com.instrument.vo.ReplacementTimelineVO;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -70,30 +72,52 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
 
     @Override
     @Transactional
-    public boolean add(ReplacementDTO dto) {
+    public ReplacementResultVO add(ReplacementDTO dto) {
+        Accessory accessory = validateAndGetAccessory(dto.getAccessoryId());
+        validateReplaceDate(dto.getReplaceDate(), accessory);
+
         ReplacementRecord entity = new ReplacementRecord();
         BeanUtils.copyProperties(dto, entity);
         fillAccessoryInfo(entity, dto.getAccessoryId());
         calculateUsageDays(entity, dto.getAccessoryId(), null);
+
         boolean result = recordMapper.insert(entity) > 0;
-        if (result) {
-            recalculateByAccessory(dto.getAccessoryId());
+        if (!result) {
+            return null;
         }
-        return result;
+
+        recalculateByAccessory(dto.getAccessoryId());
+
+        ReplacementRecord savedRecord = recordMapper.selectById(entity.getId());
+        ReplacementResultVO resultVO = buildResultVO(savedRecord, accessory);
+        updateAccessoryStatusToGood(accessory, resultVO);
+
+        return resultVO;
     }
 
     @Override
     @Transactional
-    public boolean update(ReplacementDTO dto) {
+    public ReplacementResultVO update(ReplacementDTO dto) {
+        Accessory accessory = validateAndGetAccessory(dto.getAccessoryId());
+        validateReplaceDate(dto.getReplaceDate(), accessory);
+
         ReplacementRecord entity = new ReplacementRecord();
         BeanUtils.copyProperties(dto, entity);
         fillAccessoryInfo(entity, dto.getAccessoryId());
         calculateUsageDays(entity, dto.getAccessoryId(), dto.getId());
+
         boolean result = recordMapper.updateById(entity) > 0;
-        if (result) {
-            recalculateByAccessory(dto.getAccessoryId());
+        if (!result) {
+            return null;
         }
-        return result;
+
+        recalculateByAccessory(dto.getAccessoryId());
+
+        ReplacementRecord updatedRecord = recordMapper.selectById(dto.getId());
+        ReplacementResultVO resultVO = buildResultVO(updatedRecord, accessory);
+        updateAccessoryStatusToGood(accessory, resultVO);
+
+        return resultVO;
     }
 
     @Override
@@ -343,6 +367,84 @@ public class ReplacementRecordServiceImpl implements ReplacementRecordService {
         if (last != null && last.getReplaceDate() != null) {
             long days = ChronoUnit.DAYS.between(last.getReplaceDate(), entity.getReplaceDate());
             entity.setUsageDays((int) Math.max(days, 0));
+        }
+    }
+
+    private Accessory validateAndGetAccessory(Long accessoryId) {
+        if (accessoryId == null) {
+            throw new IllegalArgumentException("请选择配件");
+        }
+        Accessory accessory = accessoryMapper.selectById(accessoryId);
+        if (accessory == null || (accessory.getDeleted() != null && accessory.getDeleted() == 1)) {
+            throw new IllegalArgumentException("关联配件不存在或已删除");
+        }
+        return accessory;
+    }
+
+    private void validateReplaceDate(LocalDate replaceDate, Accessory accessory) {
+        if (replaceDate == null) {
+            throw new IllegalArgumentException("更换日期不能为空");
+        }
+        if (accessory.getPurchaseDate() != null && replaceDate.isBefore(accessory.getPurchaseDate())) {
+            throw new IllegalArgumentException("更换日期不得早于采购日期（" + accessory.getPurchaseDate() + "）");
+        }
+    }
+
+    private ReplacementResultVO buildResultVO(ReplacementRecord record, Accessory accessory) {
+        ReplacementResultVO vo = new ReplacementResultVO();
+        vo.setRecordId(record.getId());
+        vo.setUsageDays(record.getUsageDays());
+        vo.setStandardCycle(record.getStandardCycle());
+
+        if (record.getUsageDays() != null && record.getStandardCycle() != null && record.getStandardCycle() > 0) {
+            int deviation = record.getUsageDays() - record.getStandardCycle();
+            vo.setDeviationDays(deviation);
+            double ratio = (double) record.getUsageDays() / record.getStandardCycle();
+            vo.setDeviationRatio(Math.round(ratio * 100.0) / 100.0);
+
+            String label;
+            if (ratio >= 1.2) {
+                label = "超期使用（+" + (deviation) + "天）";
+            } else if (ratio >= 1.0) {
+                label = "已达标准周期（+" + deviation + "天）";
+            } else if (ratio >= 0.8) {
+                label = "接近标准周期（" + deviation + "天）";
+            } else {
+                label = "提前更换（" + deviation + "天）";
+            }
+            vo.setDeviationLabel(label);
+        }
+
+        vo.setPreviousStatus(accessory.getWornStatus());
+        return vo;
+    }
+
+    private void updateAccessoryStatusToGood(Accessory accessory, ReplacementResultVO resultVO) {
+        String currentStatus = accessory.getWornStatus();
+        String targetStatus = "good";
+
+        if (targetStatus.equals(currentStatus)) {
+            resultVO.setStatusUpdated(false);
+            resultVO.setCurrentStatus(currentStatus);
+            resultVO.setStatusMessage("配件状态已是完好，无需变更");
+            return;
+        }
+
+        Accessory updateEntity = new Accessory();
+        updateEntity.setId(accessory.getId());
+        updateEntity.setWornStatus(targetStatus);
+        int updated = accessoryMapper.updateById(updateEntity);
+
+        if (updated > 0) {
+            resultVO.setStatusUpdated(true);
+            resultVO.setCurrentStatus(targetStatus);
+            resultVO.setStatusMessage("配件状态已联动更新为完好");
+            log.info("更换记录提交成功，配件[{}]状态由[{}]更新为[{}]", accessory.getId(), currentStatus, targetStatus);
+        } else {
+            resultVO.setStatusUpdated(false);
+            resultVO.setCurrentStatus(currentStatus);
+            resultVO.setStatusMessage("配件状态更新失败");
+            log.warn("更换记录提交后配件状态更新失败，accessoryId={}", accessory.getId());
         }
     }
 

@@ -4,6 +4,7 @@ import com.instrument.common.PageResult;
 import com.instrument.dto.ReplacementDTO;
 import com.instrument.dto.ReplacementQueryDTO;
 import com.instrument.entity.ReplacementRecord;
+import com.instrument.vo.ReplacementResultVO;
 import com.instrument.vo.ReplacementTimelineVO;
 
 import java.util.List;
@@ -18,9 +19,9 @@ public interface ReplacementRecordService {
 
     ReplacementRecord getById(Long id);
 
-    boolean add(ReplacementDTO dto);
+    ReplacementResultVO add(ReplacementDTO dto);
 
-    boolean update(ReplacementDTO dto);
+    ReplacementResultVO update(ReplacementDTO dto);
 
     boolean remove(List<Long> ids);
 

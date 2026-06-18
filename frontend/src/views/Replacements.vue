@@ -296,7 +296,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { List, Clock, Plus, Goods, ChatDotRound, Refresh, ArrowDown, Timer } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { replacementApi, accessoryApi } from '@/api'
@@ -572,12 +572,14 @@ const handleSubmit = async () => {
   submitting.value = true
   const originalForm = { ...form }
   try {
+    let res
     if (dialogMode.value === 'add') {
-      await replacementApi.add(form)
+      res = await replacementApi.add(form)
     } else {
-      await replacementApi.update(form)
+      res = await replacementApi.update(form)
     }
-    ElMessage.success('保存成功')
+    const result = res?.data
+    showSuccessNotification(result)
     dialogVisible.value = false
     refreshCurrentView()
   } catch (err) {
@@ -591,6 +593,37 @@ const handleSubmit = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+const showSuccessNotification = (result) => {
+  if (!result) {
+    ElMessage.success('保存成功')
+    return
+  }
+
+  const lines = []
+
+  if (result.deviationLabel) {
+    lines.push(`<div style="margin-bottom: 8px;"><b>周期偏差：</b>${result.deviationLabel}</div>`)
+  } else if (result.usageDays != null) {
+    lines.push(`<div style="margin-bottom: 8px;"><b>使用天数：</b>${result.usageDays}天</div>`)
+  }
+
+  if (result.statusMessage) {
+    const statusIcon = result.statusUpdated ? '✅' : 'ℹ️'
+    lines.push(`<div><b>状态联动：</b>${statusIcon} ${result.statusMessage}</div>`)
+  }
+
+  const html = lines.join('')
+
+  ElNotification({
+    title: '更换记录保存成功',
+    dangerouslyUseHTMLString: true,
+    message: html || '保存成功',
+    type: 'success',
+    duration: 5000,
+    showClose: true
+  })
 }
 
 const handleDialogClose = () => {

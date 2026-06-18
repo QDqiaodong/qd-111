@@ -6,6 +6,7 @@ import com.instrument.dto.ReplacementDTO;
 import com.instrument.dto.ReplacementQueryDTO;
 import com.instrument.entity.ReplacementRecord;
 import com.instrument.service.ReplacementRecordService;
+import com.instrument.vo.ReplacementResultVO;
 import com.instrument.vo.ReplacementTimelineVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,13 +49,15 @@ public class ReplacementRecordController {
     }
 
     @PostMapping
-    public Result<Void> add(@Valid @RequestBody ReplacementDTO dto) {
-        return recordService.add(dto) ? Result.success() : Result.error("新增失败");
+    public Result<ReplacementResultVO> add(@Valid @RequestBody ReplacementDTO dto) {
+        ReplacementResultVO result = recordService.add(dto);
+        return result != null ? Result.success(result) : Result.error("新增失败");
     }
 
     @PutMapping
-    public Result<Void> update(@Valid @RequestBody ReplacementDTO dto) {
-        return recordService.update(dto) ? Result.success() : Result.error("更新失败");
+    public Result<ReplacementResultVO> update(@Valid @RequestBody ReplacementDTO dto) {
+        ReplacementResultVO result = recordService.update(dto);
+        return result != null ? Result.success(result) : Result.error("更新失败");
     }
 
     @DeleteMapping
