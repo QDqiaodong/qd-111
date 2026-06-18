@@ -705,25 +705,15 @@ const loadList = async () => {
       tableData.value = res.data.records || res.data.list || []
       pagination.total = res.data.total || tableData.value.length
     } else {
-      loadMockList()
+      tableData.value = []
+      pagination.total = 0
     }
   } catch {
-    loadMockList()
+    tableData.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }
-}
-
-const loadMockList = () => {
-  tableData.value = [
-    { id: 1, name: '木吉他琴弦', typeCode: 'string', typeName: '琴弦', specification: '012-053 磷铜覆膜', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 1, groupName: '弹奏配件', brandModel: 'Elixir Nanoweb', standardCycle: 90, wornStatus: 'slight', purchaseDate: '2026-04-01', imageUrl: '', remark: '常用款', createTime: '2026-04-01 10:00:00' },
-    { id: 2, name: '小提琴松香', typeCode: 'rosin', typeName: '松香', specification: '无尘轻型 4/4', instrument: 'violin', instrumentName: '小提琴', groupId: 3, groupName: '养护耗材', brandModel: 'Pirastro', standardCycle: 180, wornStatus: 'good', purchaseDate: '2026-05-01', imageUrl: '', remark: '', createTime: '2026-05-01 14:00:00' },
-    { id: 3, name: '电吉他拨片', typeCode: 'pick', typeName: '拨片', specification: '0.88mm 尼龙防滑', instrument: 'guitar-electric', instrumentName: '电吉他', groupId: 1, groupName: '弹奏配件', brandModel: 'Dunlop Tortex', standardCycle: 60, wornStatus: 'good', purchaseDate: '2026-05-10', imageUrl: '', remark: '5片装', createTime: '2026-05-10 09:30:00' },
-    { id: 4, name: '小提琴琴弓', typeCode: 'bow', typeName: '琴弓', specification: '4/4 巴西木 八角弓', instrument: 'violin', instrumentName: '小提琴', groupId: 1, groupName: '弹奏配件', brandModel: '', standardCycle: 365, wornStatus: 'slight', purchaseDate: '2026-01-15', imageUrl: '', remark: '', createTime: '2026-01-15 16:00:00' },
-    { id: 5, name: '吉他变调夹', typeCode: 'capo', typeName: '变调夹', specification: '弹簧式 金属款', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 2, groupName: '辅助工具', brandModel: 'Shubb C1', standardCycle: 730, wornStatus: 'good', purchaseDate: '2025-11-20', imageUrl: '', remark: '', createTime: '2025-11-20 11:00:00' },
-    { id: 6, name: '指板清洁剂', typeCode: 'cleaner', typeName: '清洁用品', specification: '柠檬油 100ml', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 3, groupName: '养护耗材', brandModel: 'MusicNomad', standardCycle: 180, wornStatus: 'severe', purchaseDate: '2025-08-01', imageUrl: '', remark: '快用完了', createTime: '2025-08-01 08:00:00' }
-  ]
-  pagination.total = tableData.value.length
 }
 
 const handleSearch = () => {

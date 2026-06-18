@@ -185,15 +185,7 @@ const loadAccessories = async () => {
     const res = await accessoryApi.list()
     accessoryList.value = res.data || res || []
   } catch {
-    accessoryList.value = [
-      { id: 1, name: '木吉他琴弦', specification: '012-053 磷铜覆膜', instrumentName: '木吉他', standardCycle: 90, imageUrl: '', purchaseDate: '2025-12-01', wornStatus: 'good' },
-      { id: 2, name: '小提琴松香', specification: '无尘轻型 4/4', instrumentName: '小提琴', standardCycle: 180, imageUrl: '', purchaseDate: '2025-11-15', wornStatus: 'slight' },
-      { id: 3, name: '电吉他拨片', specification: '0.88mm 尼龙防滑', instrumentName: '电吉他', standardCycle: 60, imageUrl: '', purchaseDate: '2026-01-01', wornStatus: 'good' },
-      { id: 4, name: '小提琴琴弓', specification: '4/4 巴西木 八角弓', instrumentName: '小提琴', standardCycle: 365, imageUrl: '', purchaseDate: '2025-06-01', wornStatus: 'severe' },
-      { id: 5, name: '吉他变调夹', specification: '弹簧式 金属款', instrumentName: '木吉他', standardCycle: 730, imageUrl: '', purchaseDate: '2024-01-15', wornStatus: 'good' },
-      { id: 6, name: '指板清洁剂', specification: '柠檬油 100ml', instrumentName: '木吉他', standardCycle: 180, imageUrl: '', purchaseDate: '2025-09-20', wornStatus: 'good' },
-      { id: 7, name: '贝斯琴弦', specification: '045-105 镍钢缠丝', instrumentName: '贝斯', standardCycle: 120, imageUrl: '', purchaseDate: '2026-02-01', wornStatus: 'broken' }
-    ]
+    accessoryList.value = []
   }
 }
 
@@ -208,10 +200,12 @@ const loadCalendar = async () => {
       calendarData.value = res.data
       buildCalendarDays(res.data)
     } else {
-      loadMockCalendar()
+      calendarData.value = { dayMap: {}, days: [], expectedCount: 0, replacedCount: 0, severeCount: 0 }
+      buildCalendarDays(calendarData.value)
     }
   } catch {
-    loadMockCalendar()
+    calendarData.value = { dayMap: {}, days: [], expectedCount: 0, replacedCount: 0, severeCount: 0 }
+    buildCalendarDays(calendarData.value)
   } finally {
     loading.value = false
   }
@@ -398,12 +392,10 @@ const handleDayClick = async (day) => {
     if (res && res.data && res.data.accessories) {
       selectedDayData.value = res.data
     } else {
-      const dayData = calendarData.value.dayMap?.[day.fullDate]
-      selectedDayData.value = dayData || { accessories: [] }
+      selectedDayData.value = { accessories: [] }
     }
   } catch {
-    const dayData = calendarData.value.dayMap?.[day.fullDate]
-    selectedDayData.value = dayData || { accessories: [] }
+    selectedDayData.value = { accessories: [] }
   }
 
   detailDialogVisible.value = true

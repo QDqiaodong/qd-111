@@ -326,16 +326,7 @@ const loadAccessories = async () => {
     const res = await accessoryApi.list()
     allAccessories.value = res.data || res || []
   } catch {
-    allAccessories.value = [
-      { id: 1, name: '木吉他琴弦', specification: '012-053 磷铜覆膜', typeCode: 'string', typeName: '琴弦', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 1, wornStatus: 'slight', purchaseDate: '2026-04-01', imageUrl: '', standardCycle: 90 },
-      { id: 2, name: '小提琴松香', specification: '无尘轻型 4/4', typeCode: 'rosin', typeName: '松香', instrument: 'violin', instrumentName: '小提琴', groupId: 3, wornStatus: 'good', purchaseDate: '2026-05-01', imageUrl: '', standardCycle: 180 },
-      { id: 3, name: '电吉他拨片', specification: '0.88mm 尼龙防滑', typeCode: 'pick', typeName: '拨片', instrument: 'guitar-electric', instrumentName: '电吉他', groupId: 1, wornStatus: 'good', purchaseDate: '2026-05-10', imageUrl: '', standardCycle: 60 },
-      { id: 4, name: '小提琴琴弓', specification: '4/4 巴西木 八角弓', typeCode: 'bow', typeName: '琴弓', instrument: 'violin', instrumentName: '小提琴', groupId: 1, wornStatus: 'slight', purchaseDate: '2026-01-15', imageUrl: '', standardCycle: 365 },
-      { id: 5, name: '吉他变调夹', specification: '弹簧式 金属款', typeCode: 'capo', typeName: '变调夹', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 2, wornStatus: 'good', purchaseDate: '2025-11-20', imageUrl: '', standardCycle: 730 },
-      { id: 6, name: '指板清洁剂', specification: '柠檬油 100ml', typeCode: 'cleaner', typeName: '清洁用品', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 3, wornStatus: 'severe', purchaseDate: '2025-08-01', imageUrl: '', standardCycle: 180 },
-      { id: 7, name: '贝斯琴弦', specification: '045-105 镍钢', typeCode: 'string', typeName: '琴弦', instrument: 'guitar-bass', instrumentName: '贝斯', groupId: 1, wornStatus: 'broken', purchaseDate: '2025-06-01', imageUrl: '', standardCycle: 90 },
-      { id: 8, name: '尤克里里琴弦', specification: '碳素 高音C', typeCode: 'string', typeName: '琴弦', instrument: 'ukulele', instrumentName: '尤克里里', groupId: 1, wornStatus: 'good', purchaseDate: '2026-03-15', imageUrl: '', standardCycle: 90 }
-    ]
+    allAccessories.value = []
   }
   loading.value = false
 }
@@ -350,50 +341,7 @@ const loadHealthScores = async () => {
     })
     healthScoreMap.value = map
   } catch {
-    const map = {}
-    groupList.value.forEach(g => {
-      const accs = allAccessories.value.filter(a => a.groupId === g.id)
-      const totalCount = accs.length
-      const severeCount = accs.filter(a => a.wornStatus === 'severe').length
-      const brokenCount = accs.filter(a => a.wornStatus === 'broken').length
-      const overdueCount = accs.filter(a => {
-        if (!a.purchaseDate || !a.standardCycle) return false
-        const purchaseDate = new Date(a.purchaseDate)
-        const today = new Date()
-        const diffDays = Math.floor((today - purchaseDate) / (1000 * 60 * 60 * 24))
-        return diffDays > a.standardCycle
-      }).length
-      const recentReplacementCount = 0
-      const severeDeduction = Math.min(severeCount * 5, 30)
-      const brokenDeduction = Math.min(brokenCount * 10, 40)
-      const overdueDeduction = Math.min(overdueCount * 8, 30)
-      const recentDeduction = 0
-      const score = Math.max(0, 100 - severeDeduction - brokenDeduction - overdueDeduction - recentDeduction)
-      let level, color
-      if (score >= 80) { level = '健康'; color = '#67c23a' }
-      else if (score >= 60) { level = '一般'; color = '#e6a23c' }
-      else if (score >= 40) { level = '较差'; color = '#f56c6c' }
-      else { level = '危险'; color = '#c45656' }
-      map[g.id] = {
-        groupId: g.id,
-        groupName: g.name,
-        score,
-        level,
-        color,
-        totalCount,
-        severeCount,
-        brokenCount,
-        overdueCount,
-        recentReplacementCount,
-        details: [
-          { factor: 'severe', label: '严重损耗', count: severeCount, deduction: severeDeduction, maxDeduction: 30 },
-          { factor: 'broken', label: '已损坏/断裂', count: brokenCount, deduction: brokenDeduction, maxDeduction: 40 },
-          { factor: 'overdue', label: '超期未更换', count: overdueCount, deduction: overdueDeduction, maxDeduction: 30 },
-          { factor: 'recent_replacement', label: '近期更换频繁', count: recentReplacementCount, deduction: recentDeduction, maxDeduction: 15 }
-        ]
-      }
-    })
-    healthScoreMap.value = map
+    healthScoreMap.value = {}
   }
 }
 

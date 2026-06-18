@@ -154,9 +154,9 @@
         <el-table-column label="标注状态" width="200" fixed="right" align="center">
           <template #default="{ row }">
             <el-radio-group
-              v-model="row.wornStatus"
+              :model-value="row.wornStatus"
               size="small"
-              @change="(val) => handleQuickMark(row, val)"
+              @update:model-value="(val) => handleQuickMark(row, val)"
             >
               <el-radio-button
                 v-for="w in wornStatuses"
@@ -446,67 +446,12 @@ const loadHeatmap = async () => {
     if (res && res.data) {
       heatmapData.value = res.data
     } else {
-      loadMockHeatmap()
+      heatmapData.value = {}
     }
   } catch {
-    loadMockHeatmap()
+    heatmapData.value = {}
   } finally {
     heatmapLoading.value = false
-  }
-}
-
-const loadMockHeatmap = () => {
-  heatmapData.value = {
-    instruments: [
-      { code: 'guitar-acoustic', label: '木吉他' },
-      { code: 'guitar-electric', label: '电吉他' },
-      { code: 'guitar-bass', label: '贝斯' },
-      { code: 'violin', label: '小提琴' },
-      { code: 'ukulele', label: '尤克里里' },
-      { code: 'erhu', label: '二胡' }
-    ],
-    accessoryTypes: [
-      { code: 'string', label: '琴弦' },
-      { code: 'bow', label: '琴弓' },
-      { code: 'pick', label: '拨片' },
-      { code: 'rosin', label: '松香' },
-      { code: 'capo', label: '变调夹' },
-      { code: 'strap', label: '背带' },
-      { code: 'cleaner', label: '清洁用品' }
-    ],
-    legends: [
-      { code: 'good', label: '完好', color: '#67c23a' },
-      { code: 'slight', label: '轻微磨损', color: '#e6a23c' },
-      { code: 'severe', label: '严重损耗', color: '#f56c6c' },
-      { code: 'broken', label: '已损坏', color: '#909399' }
-    ],
-    cells: [
-      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'string', typeName: '琴弦', total: 5, goodCount: 2, slightCount: 2, severeCount: 1, brokenCount: 0 },
-      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'pick', typeName: '拨片', total: 3, goodCount: 2, slightCount: 1, severeCount: 0, brokenCount: 0 },
-      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'capo', typeName: '变调夹', total: 2, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 1 },
-      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'strap', typeName: '背带', total: 2, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 1 },
-      { instrumentCode: 'guitar-acoustic', instrumentName: '木吉他', typeCode: 'cleaner', typeName: '清洁用品', total: 2, goodCount: 0, slightCount: 1, severeCount: 1, brokenCount: 0 },
-
-      { instrumentCode: 'guitar-electric', instrumentName: '电吉他', typeCode: 'string', typeName: '琴弦', total: 4, goodCount: 2, slightCount: 1, severeCount: 1, brokenCount: 0 },
-      { instrumentCode: 'guitar-electric', instrumentName: '电吉他', typeCode: 'pick', typeName: '拨片', total: 6, goodCount: 4, slightCount: 2, severeCount: 0, brokenCount: 0 },
-      { instrumentCode: 'guitar-electric', instrumentName: '电吉他', typeCode: 'capo', typeName: '变调夹', total: 1, goodCount: 0, slightCount: 0, severeCount: 0, brokenCount: 1 },
-      { instrumentCode: 'guitar-electric', instrumentName: '电吉他', typeCode: 'strap', typeName: '背带', total: 2, goodCount: 2, slightCount: 0, severeCount: 0, brokenCount: 0 },
-
-      { instrumentCode: 'guitar-bass', instrumentName: '贝斯', typeCode: 'string', typeName: '琴弦', total: 3, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 1 },
-      { instrumentCode: 'guitar-bass', instrumentName: '贝斯', typeCode: 'pick', typeName: '拨片', total: 2, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 0 },
-
-      { instrumentCode: 'violin', instrumentName: '小提琴', typeCode: 'string', typeName: '琴弦', total: 2, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 0 },
-      { instrumentCode: 'violin', instrumentName: '小提琴', typeCode: 'bow', typeName: '琴弓', total: 2, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 0 },
-      { instrumentCode: 'violin', instrumentName: '小提琴', typeCode: 'rosin', typeName: '松香', total: 3, goodCount: 1, slightCount: 1, severeCount: 1, brokenCount: 0 },
-      { instrumentCode: 'violin', instrumentName: '小提琴', typeCode: 'cleaner', typeName: '清洁用品', total: 1, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 0 },
-
-      { instrumentCode: 'ukulele', instrumentName: '尤克里里', typeCode: 'string', typeName: '琴弦', total: 2, goodCount: 2, slightCount: 0, severeCount: 0, brokenCount: 0 },
-      { instrumentCode: 'ukulele', instrumentName: '尤克里里', typeCode: 'pick', typeName: '拨片', total: 1, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 0 },
-
-      { instrumentCode: 'erhu', instrumentName: '二胡', typeCode: 'string', typeName: '琴弦', total: 1, goodCount: 1, slightCount: 0, severeCount: 0, brokenCount: 0 },
-      { instrumentCode: 'erhu', instrumentName: '二胡', typeCode: 'bow', typeName: '琴弓', total: 1, goodCount: 0, slightCount: 1, severeCount: 0, brokenCount: 0 },
-      { instrumentCode: 'erhu', instrumentName: '二胡', typeCode: 'rosin', typeName: '松香', total: 2, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 0 }
-    ]
   }
 }
 
@@ -522,10 +467,12 @@ const loadList = async () => {
       tableData.value = res.data.records || res.data.list || []
       pagination.total = res.data.total || tableData.value.length
     } else {
-      loadMockList()
+      tableData.value = []
+      pagination.total = 0
     }
   } catch {
-    loadMockList()
+    tableData.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }
@@ -541,38 +488,11 @@ const loadAllList = async () => {
     if (res && res.data) {
       allAccessories.value = res.data.records || res.data.list || res.data || []
     } else {
-      loadMockAllList()
+      allAccessories.value = []
     }
   } catch {
-    loadMockAllList()
+    allAccessories.value = []
   }
-}
-
-const loadMockAllList = () => {
-  allAccessories.value = [
-    { id: 1, wornStatus: 'slight' },
-    { id: 2, wornStatus: 'good' },
-    { id: 3, wornStatus: 'good' },
-    { id: 4, wornStatus: 'slight' },
-    { id: 5, wornStatus: 'good' },
-    { id: 6, wornStatus: 'severe' },
-    { id: 7, wornStatus: 'broken' },
-    { id: 8, wornStatus: 'good' }
-  ]
-}
-
-const loadMockList = () => {
-  tableData.value = [
-    { id: 1, name: '木吉他琴弦', specification: '012-053 磷铜覆膜', typeCode: 'string', typeName: '琴弦', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 1, groupName: '弹奏配件', wornStatus: 'slight', purchaseDate: '2026-04-01', imageUrl: '', usageDays: 74 },
-    { id: 2, name: '小提琴松香', specification: '无尘轻型 4/4', typeCode: 'rosin', typeName: '松香', instrument: 'violin', instrumentName: '小提琴', groupId: 3, groupName: '养护耗材', wornStatus: 'good', purchaseDate: '2026-05-01', imageUrl: '', usageDays: 44 },
-    { id: 3, name: '电吉他拨片', specification: '0.88mm 尼龙防滑', typeCode: 'pick', typeName: '拨片', instrument: 'guitar-electric', instrumentName: '电吉他', groupId: 1, groupName: '弹奏配件', wornStatus: 'good', purchaseDate: '2026-05-10', imageUrl: '', usageDays: 35 },
-    { id: 4, name: '小提琴琴弓', specification: '4/4 巴西木 八角弓', typeCode: 'bow', typeName: '琴弓', instrument: 'violin', instrumentName: '小提琴', groupId: 1, groupName: '弹奏配件', wornStatus: 'slight', purchaseDate: '2026-01-15', imageUrl: '', usageDays: 150 },
-    { id: 5, name: '吉他变调夹', specification: '弹簧式 金属款', typeCode: 'capo', typeName: '变调夹', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 2, groupName: '辅助工具', wornStatus: 'good', purchaseDate: '2025-11-20', imageUrl: '', usageDays: 206 },
-    { id: 6, name: '指板清洁剂', specification: '柠檬油 100ml', typeCode: 'cleaner', typeName: '清洁用品', instrument: 'guitar-acoustic', instrumentName: '木吉他', groupId: 3, groupName: '养护耗材', wornStatus: 'severe', purchaseDate: '2025-08-01', imageUrl: '', usageDays: 317 },
-    { id: 7, name: '贝斯琴弦', specification: '045-105 镍钢', typeCode: 'string', typeName: '琴弦', instrument: 'guitar-bass', instrumentName: '贝斯', groupId: 1, groupName: '弹奏配件', wornStatus: 'broken', purchaseDate: '2025-06-01', imageUrl: '', usageDays: 378 },
-    { id: 8, name: '尤克里里琴弦', specification: '碳素 高音C', typeCode: 'string', typeName: '琴弦', instrument: 'ukulele', instrumentName: '尤克里里', groupId: 1, groupName: '弹奏配件', wornStatus: 'good', purchaseDate: '2026-03-15', imageUrl: '', usageDays: 91 }
-  ]
-  pagination.total = tableData.value.length
 }
 
 const handleSearch = () => {
@@ -607,8 +527,10 @@ const handleQuickMark = async (row, status) => {
   try {
     await accessoryApi.updateStatus(row.id, status)
     ElMessage.success(`已更新为「${getWornLabel(status)}」`)
+    row.wornStatus = status
     const allRow = allAccessories.value.find(a => a.id === row.id)
     if (allRow) allRow.wornStatus = status
+    await loadHeatmap()
   } catch (e) {
     row.wornStatus = originalStatus
     if (e?.message !== 'cancel') {
@@ -637,8 +559,11 @@ const executeBatchMark = async () => {
     ElMessage.success('批量标注成功')
     tableRef.value.clearSelection()
     confirmDialogVisible.value = false
-    loadAllList()
-    loadList()
+    await Promise.all([
+      loadAllList(),
+      loadList(),
+      loadHeatmap()
+    ])
   } catch (e) {
     originalStatuses.forEach(os => {
       const row = tableData.value.find(r => r.id === os.id)

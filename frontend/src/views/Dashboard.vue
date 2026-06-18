@@ -337,6 +337,8 @@ const loadData = async () => {
 
     if (h && h.data) {
       wornHeatmapData.value = h.data
+    } else {
+      wornHeatmapData.value = {}
     }
 
     if (r && (r.data || r)) {
@@ -349,7 +351,15 @@ const loadData = async () => {
       categorizeFromUpcoming()
     }
   } catch {
-    loadMockData()
+    Object.assign(stats, { totalAccessories: 0, wornCount: 0, monthReplacements: 0, groupCount: 0 })
+    upcomingList.value = []
+    wornDist.value = []
+    groupDist.value = []
+    wornHeatmapData.value = {}
+    expiredList.value = []
+    brokenList.value = []
+    severeList.value = []
+    upcomingRiskList.value = []
   } finally {
     heatmapLoading.value = false
   }
