@@ -14,6 +14,7 @@ import com.instrument.service.AccessoryCompatibilityService;
 import com.instrument.service.AccessoryService;
 import com.instrument.service.DictService;
 import com.instrument.service.StandardCycleRuleService;
+import com.instrument.util.ImageUtil;
 import com.instrument.util.RiskLevelCalculator;
 import com.instrument.vo.AccessoryCompatibilityVO;
 import com.instrument.vo.AccessoryLifecycleVO;
@@ -53,6 +54,7 @@ public class AccessoryServiceImpl implements AccessoryService {
         IPage<Accessory> page = accessoryMapper.selectPage(
                 new Page<>(query.getPageNum(), query.getPageSize()), wrapper);
         fillUsageDays(page.getRecords());
+        fillImageInfo(page.getRecords());
         return PageResult.of(page);
     }
 
@@ -63,7 +65,20 @@ public class AccessoryServiceImpl implements AccessoryService {
         wrapper.orderByDesc(Accessory::getCreateTime);
         List<Accessory> list = accessoryMapper.selectList(wrapper);
         fillUsageDays(list);
+        fillImageInfo(list);
         return list;
+    }
+
+    private void fillImageInfo(List<Accessory> accessories) {
+        if (accessories == null || accessories.isEmpty()) {
+            return;
+        }
+        for (Accessory acc : accessories) {
+            acc.setImageUrl(ImageUtil.resolveImageUrl(acc.getImageUrl(), acc.getTypeCode()));
+            acc.setImageWidth(ImageUtil.resolveImageWidth(acc.getImageWidth()));
+            acc.setImageHeight(ImageUtil.resolveImageHeight(acc.getImageHeight()));
+            acc.setImageSize(ImageUtil.resolveImageSize(acc.getImageSize()));
+        }
     }
 
     private void fillUsageDays(List<Accessory> accessories) {
@@ -108,6 +123,7 @@ public class AccessoryServiceImpl implements AccessoryService {
         Accessory accessory = accessoryMapper.selectById(id);
         if (accessory != null) {
             fillUsageDays(Collections.singletonList(accessory));
+            fillImageInfo(Collections.singletonList(accessory));
         }
         return accessory;
     }
@@ -118,6 +134,7 @@ public class AccessoryServiceImpl implements AccessoryService {
     public boolean add(AccessoryDTO dto) {
         validateWornStatus(dto.getWornStatus());
         validateStandardCycle(dto.getStandardCycle());
+        validateImageInfo(dto);
         Accessory entity = new Accessory();
         BeanUtils.copyProperties(dto, entity);
         fillDictFields(entity);
@@ -134,6 +151,7 @@ public class AccessoryServiceImpl implements AccessoryService {
     public boolean update(AccessoryDTO dto) {
         validateWornStatus(dto.getWornStatus());
         validateStandardCycle(dto.getStandardCycle());
+        validateImageInfo(dto);
 
         Accessory existing = accessoryMapper.selectById(dto.getId());
         boolean purchaseDateChanged = existing != null
@@ -246,6 +264,18 @@ public class AccessoryServiceImpl implements AccessoryService {
     private void validateStandardCycle(Integer cycle) {
         if (cycle != null && cycle <= 0) {
             throw new IllegalArgumentException("标准更换周期必须大于0，当前值: " + cycle);
+        }
+    }
+
+    private void validateImageInfo(AccessoryDTO dto) {
+        if (StringUtils.hasText(dto.getImageUrl()) && !ImageUtil.isValidImageUrl(dto.getImageUrl())) {
+            throw new IllegalArgumentException("图片地址格式不正确，必须以http://、https://或data:image/开头");
+        }
+        if (!ImageUtil.validateImageDimension(dto.getImageWidth(), dto.getImageHeight())) {
+            throw new IllegalArgumentException("图片尺寸超出限制，最大支持 " + ImageUtil.MAX_IMAGE_WIDTH + "x" + ImageUtil.MAX_IMAGE_HEIGHT + " 像素");
+        }
+        if (!ImageUtil.validateImageSize(dto.getImageSize())) {
+            throw new IllegalArgumentException("图片大小超出限制，最大支持 " + ImageUtil.formatImageSize(ImageUtil.MAX_IMAGE_SIZE));
         }
     }
 

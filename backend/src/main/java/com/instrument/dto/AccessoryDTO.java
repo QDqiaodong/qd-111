@@ -44,5 +44,11 @@ public class AccessoryDTO implements Serializable {
 
     private String imageUrl;
 
+    private Integer imageWidth;
+
+    private Integer imageHeight;
+
+    private Long imageSize;
+
     private String remark;
 }

@@ -63,13 +63,11 @@
         <el-table-column label="配图" width="80" align="center">
           <template #default="{ row }">
             <el-image
-              v-if="row.imageUrl"
-              :src="row.imageUrl"
-              :preview-src-list="[row.imageUrl]"
+              :src="getImageMeta(row).imageUrl"
+              :preview-src-list="[getImageMeta(row).imageUrl]"
               fit="cover"
               style="width: 44px; height: 44px; border-radius: 6px"
             />
-            <el-icon v-else :size="28" color="#c0c4cc"><Picture /></el-icon>
           </template>
         </el-table-column>
         <el-table-column prop="name" label="配件名称" min-width="130" sortable show-overflow-tooltip />
@@ -389,7 +387,15 @@
             >
               <el-icon><Plus /></el-icon>
             </el-upload>
-            <div style="font-size: 12px; color: #909399; margin-top: 6px">支持 JPG/PNG，自动压缩至 1280px 以内</div>
+            <div style="font-size: 12px; color: #909399; margin-top: 6px">
+              支持 JPG/PNG，最大 5MB，自动压缩至 1920px 以内
+              <span v-if="form.imageWidth && form.imageHeight" style="margin-left: 8px">
+                尺寸：{{ form.imageWidth }} × {{ form.imageHeight }}px
+              </span>
+              <span v-if="form.imageSize" style="margin-left: 8px">
+                大小：{{ formatFileSize(form.imageSize) }}
+              </span>
+            </div>
           </el-form-item>
           <el-form-item label="备注">
             <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="其他需要记录的信息" maxlength="500" show-word-limit />
@@ -405,6 +411,20 @@
 
     <el-dialog v-model="viewVisible" title="配件详情" width="720px" destroy-on-close>
       <template v-if="currentRow">
+        <div class="detail-image-section">
+          <el-image
+            :src="getImageMeta(currentRow).imageUrl"
+            :preview-src-list="[getImageMeta(currentRow).imageUrl]"
+            fit="cover"
+            class="detail-image"
+          />
+          <div v-if="currentRow.imageWidth && currentRow.imageHeight" class="detail-image-meta">
+            尺寸：{{ currentRow.imageWidth }} × {{ currentRow.imageHeight }}px
+            <span v-if="currentRow.imageSize" style="margin-left: 12px">
+              大小：{{ formatFileSize(currentRow.imageSize) }}
+            </span>
+          </div>
+        </div>
         <el-descriptions :column="2" border>
           <el-descriptions-item label="配件名称">{{ currentRow.name }}</el-descriptions-item>
           <el-descriptions-item label="配件类型">{{ currentRow.typeName }}</el-descriptions-item>
@@ -534,7 +554,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Timer, Operation, InfoFilled, Warning, MagicStick, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { accessoryApi, dictApi, groupApi, replacementApi } from '@/api'
-import { compressImage } from '@/utils/image'
+import { compressImage, getImageMeta, getImageDimensions, MAX_IMAGE_SIZE, formatFileSize } from '@/utils/image'
 import BatchActionBar from '@/components/BatchActionBar.vue'
 
 const router = useRouter()
@@ -606,6 +626,9 @@ const form = reactive({
   purchaseDate: '',
   wornStatus: 'good',
   imageUrl: '',
+  imageWidth: null,
+  imageHeight: null,
+  imageSize: null,
   remark: ''
 })
 
@@ -743,6 +766,9 @@ const resetForm = () => {
     purchaseDate: dayjs().format('YYYY-MM-DD'),
     wornStatus: 'good',
     imageUrl: '',
+    imageWidth: null,
+    imageHeight: null,
+    imageSize: null,
     remark: ''
   })
   cycleReferenceData.value = null
@@ -1130,23 +1156,48 @@ const beforeImageUpload = async (file) => {
 
 const handleImageChange = async (uploadFile) => {
   try {
+    if (uploadFile.raw && uploadFile.raw.size > MAX_IMAGE_SIZE) {
+      ElMessage.warning(`图片大小不能超过 ${formatFileSize(MAX_IMAGE_SIZE)}，将自动压缩`)
+    }
     const compressed = await compressImage(uploadFile.raw, { quality: 0.7, maxWidth: 1280 })
+    const dimensions = await getImageDimensions(compressed)
     const reader = new FileReader()
     reader.onload = (e) => {
       form.imageUrl = e.target.result
+      form.imageWidth = dimensions.width
+      form.imageHeight = dimensions.height
+      form.imageSize = compressed.size
     }
     reader.readAsDataURL(compressed)
-  } catch {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      form.imageUrl = e.target.result
+  } catch (err) {
+    try {
+      const dimensions = await getImageDimensions(uploadFile.raw)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        form.imageUrl = e.target.result
+        form.imageWidth = dimensions.width
+        form.imageHeight = dimensions.height
+        form.imageSize = uploadFile.raw.size
+      }
+      reader.readAsDataURL(uploadFile.raw)
+    } catch {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        form.imageUrl = e.target.result
+        form.imageWidth = null
+        form.imageHeight = null
+        form.imageSize = uploadFile.raw?.size || null
+      }
+      reader.readAsDataURL(uploadFile.raw)
     }
-    reader.readAsDataURL(uploadFile.raw)
   }
 }
 
 const handleImageRemove = () => {
   form.imageUrl = ''
+  form.imageWidth = null
+  form.imageHeight = null
+  form.imageSize = null
 }
 
 const getWornLabel = (code) => {
@@ -1983,6 +2034,26 @@ onMounted(() => {
         flex-shrink: 0;
       }
     }
+  }
+}
+
+.detail-image-section {
+  text-align: center;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #ebeef5;
+
+  .detail-image {
+    width: 160px;
+    height: 160px;
+    border-radius: 8px;
+    border: 1px solid #ebeef5;
+  }
+
+  .detail-image-meta {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #909399;
   }
 }
 </style>
