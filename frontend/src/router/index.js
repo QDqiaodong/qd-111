@@ -65,6 +65,12 @@ const routes = [
         name: 'MaintenancePlan',
         component: () => import('@/views/MaintenancePlan.vue'),
         meta: { title: '乐器保养计划' }
+      },
+      {
+        path: 'preparation-checklists',
+        name: 'PreparationChecklists',
+        component: () => import('@/views/PreparationChecklists.vue'),
+        meta: { title: '更换前准备清单' }
       }
     ]
   }

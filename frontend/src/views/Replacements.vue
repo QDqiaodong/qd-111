@@ -229,67 +229,260 @@
     <el-dialog
       v-model="dialogVisible"
       :title="dialogMode === 'add' ? '登记更换' : '编辑更换记录'"
-      width="560px"
+      width="680px"
       destroy-on-close
       @close="handleDialogClose"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <div class="form-section">
-          <div class="form-section-title">更换信息</div>
-          <el-form-item label="选择配件" prop="accessoryId">
-            <el-select
-              v-model="form.accessoryId"
-              placeholder="请选择配件"
-              filterable
-              style="width: 100%"
-              @change="handleAccessoryChange"
-            >
-              <el-option
-                v-for="a in accessoryList"
-                :key="a.id"
-                :label="`${a.name} - ${a.specification}`"
-                :value="a.id"
-              />
-            </el-select>
-          </el-form-item>
-          <el-row :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="更换日期" prop="replaceDate">
-                <el-date-picker
-                  v-model="form.replaceDate"
-                  type="date"
-                  placeholder="选择更换日期"
+      <el-tabs v-model="activeTab" type="border-card">
+        <el-tab-pane label="更换信息" name="basic">
+          <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+            <div class="form-section">
+              <div class="form-section-title">更换信息</div>
+              <el-form-item label="选择配件" prop="accessoryId">
+                <el-select
+                  v-model="form.accessoryId"
+                  placeholder="请选择配件"
+                  filterable
                   style="width: 100%"
-                  value-format="YYYY-MM-DD"
+                  @change="handleAccessoryChange"
+                >
+                  <el-option
+                    v-for="a in accessoryList"
+                    :key="a.id"
+                    :label="`${a.name} - ${a.specification}`"
+                    :value="a.id"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item label="更换日期" prop="replaceDate">
+                    <el-date-picker
+                      v-model="form.replaceDate"
+                      type="date"
+                      placeholder="选择更换日期"
+                      style="width: 100%"
+                      value-format="YYYY-MM-DD"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="操作人">
+                    <el-input v-model="form.operator" placeholder="选填" maxlength="20" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item label="上次更换">
+                <el-input v-model="lastReplaceInfo" disabled placeholder="系统自动计算" />
+              </el-form-item>
+              <el-form-item label="备注">
+                <el-input
+                  v-model="form.remark"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="更换原因、安装位置等"
+                  maxlength="300"
+                  show-word-limit
                 />
               </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="操作人">
-                <el-input v-model="form.operator" placeholder="选填" maxlength="20" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item label="上次更换">
-            <el-input v-model="lastReplaceInfo" disabled placeholder="系统自动计算" />
-          </el-form-item>
-          <el-form-item label="备注">
-            <el-input
-              v-model="form.remark"
-              type="textarea"
-              :rows="3"
-              placeholder="更换原因、安装位置等"
-              maxlength="300"
-              show-word-limit
-            />
-          </el-form-item>
-        </div>
-      </el-form>
+            </div>
+          </el-form>
+        </el-tab-pane>
+
+        <el-tab-pane label="准备清单" name="checklist">
+          <div class="checklist-tab-content">
+            <div v-if="!form.accessoryId" class="empty-state">
+              <el-empty description="请先选择配件以生成准备清单" />
+            </div>
+            <div v-else-if="!linkedChecklist && !generatingChecklist" class="checklist-actions-bar">
+              <el-alert
+                title="该配件更换前需要完成准备清单"
+                :type="templateAvailable ? 'info' : 'warning'"
+                :closable="false"
+                show-icon
+                style="margin-bottom: 12px"
+              >
+                <template #default>
+                  <span v-if="templateAvailable">
+                    检测到该配件类型「{{ currentAccessory?.typeName }}」有对应的准备清单模板，建议先生成并完成清单后再提交更换记录。
+                  </span>
+                  <span v-else>
+                    该配件类型「{{ currentAccessory?.typeName }}」暂无准备清单模板，可跳过此步骤。
+                  </span>
+                </template>
+                <template #operation>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    v-if="templateAvailable"
+                    :loading="generatingChecklist"
+                    @click="generateChecklistForReplacement"
+                  >
+                    生成准备清单
+                  </el-button>
+                </template>
+              </el-alert>
+            </div>
+            <div v-else-if="linkedChecklist" class="checklist-preview">
+              <div class="checklist-preview-header">
+                <div>
+                  <div class="checklist-name">{{ linkedChecklist.templateName }}</div>
+                  <div class="checklist-meta">
+                    <el-tag size="small" :type="getStatusTagType(linkedChecklist.status)">
+                      {{ linkedChecklist.statusName }}
+                    </el-tag>
+                    <span class="progress-info">
+                      进度：{{ linkedChecklist.completedCount }}/{{ linkedChecklist.totalCount }}
+                      （必做 {{ linkedChecklist.requiredCompletedCount }}/{{ linkedChecklist.requiredTotalCount }}）
+                    </span>
+                  </div>
+                </div>
+                <div class="checklist-preview-actions">
+                  <el-button
+                    size="small"
+                    type="success"
+                    v-if="linkedChecklist.status === 'pending'"
+                    @click="startLinkedChecklist"
+                  >
+                    开始清单
+                  </el-button>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    @click="openChecklistDetail"
+                  >
+                    打开清单
+                  </el-button>
+                </div>
+              </div>
+              <el-progress
+                :percentage="getChecklistProgressPercent(linkedChecklist)"
+                :color="getChecklistProgressColor(linkedChecklist)"
+                :stroke-width="10"
+                style="margin-top: 12px"
+              />
+              <div
+                v-if="linkedChecklist.requiredCompletedCount < linkedChecklist.requiredTotalCount && dialogMode === 'add'"
+                class="checklist-warning"
+              >
+                <el-icon color="#e6a23c"><Warning /></el-icon>
+                <span>还有必做项未完成，建议完成后再提交更换记录</span>
+              </div>
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSubmit" :loading="submitting">保存</el-button>
       </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="checklistDetailDialogVisible"
+      :title="`准备清单 - ${linkedChecklist?.templateName || ''}`"
+      width="700px"
+      destroy-on-close
+      @close="handleChecklistDetailClose"
+    >
+      <div v-if="linkedChecklist" class="checklist-detail">
+        <div class="checklist-header">
+          <div class="checklist-info">
+            <div class="info-row">
+              <span class="info-label">配件：</span>
+              <span class="info-value">{{ linkedChecklist.accessoryName }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">类型：</span>
+              <span class="info-value">{{ linkedChecklist.typeName }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">总进度：</span>
+              <span class="info-value">
+                <el-tag size="small" :type="getStatusTagType(linkedChecklist.status)">
+                  {{ linkedChecklist.statusName }}
+                </el-tag>
+                <span style="margin-left: 8px">{{ linkedChecklist.completedCount }}/{{ linkedChecklist.totalCount }} 项</span>
+              </span>
+            </div>
+          </div>
+          <div class="checklist-actions" v-if="linkedChecklist.status !== 'completed'">
+            <el-button
+              type="primary"
+              size="small"
+              v-if="linkedChecklist.status === 'pending'"
+              @click="startLinkedChecklist"
+            >
+              <el-icon><VideoPlay /></el-icon>开始清单
+            </el-button>
+            <el-button
+              type="success"
+              size="small"
+              v-if="linkedChecklist.status === 'in_progress'"
+              :disabled="linkedChecklist.requiredCompletedCount < linkedChecklist.requiredTotalCount"
+              @click="completeLinkedChecklist"
+            >
+              <el-icon><CircleCheck /></el-icon>完成清单
+            </el-button>
+          </div>
+        </div>
+
+        <el-progress
+          :percentage="getChecklistProgressPercent(linkedChecklist)"
+          :color="getChecklistProgressColor(linkedChecklist)"
+          :stroke-width="12"
+        />
+        <div class="progress-stats">
+          <span>必做项：<b>{{ linkedChecklist.requiredCompletedCount }}/{{ linkedChecklist.requiredTotalCount }}</b></span>
+          <span>选做项：<b>{{ linkedChecklist.completedCount - linkedChecklist.requiredCompletedCount }}/{{ linkedChecklist.totalCount - linkedChecklist.requiredTotalCount }}</b></span>
+        </div>
+
+        <div class="category-list" v-loading="checklistDetailLoading">
+          <div v-for="category in checklistCategoryData" :key="category.category" class="category-section">
+            <div class="category-header">
+              <div class="category-title">
+                <el-icon :size="18" :color="getCategoryIconColor(category.category)">
+                  <component :is="getCategoryIcon(category.category)" />
+                </el-icon>
+                <span>{{ category.categoryName }}</span>
+              </div>
+              <el-tag size="small" :type="category.completedCount >= category.totalCount ? 'success' : 'info'">
+                {{ category.completedCount }}/{{ category.totalCount }}
+              </el-tag>
+            </div>
+            <div class="item-list">
+              <div
+                v-for="item in category.items"
+                :key="item.id"
+                class="checklist-item"
+                :class="{ 'is-completed': item.completed === 1, 'is-required': item.required === 1 }"
+              >
+                <div class="item-checkbox" @click="toggleChecklistItemComplete(item)">
+                  <el-checkbox v-model="item.completed" :label="1" @change="() => handleChecklistItemComplete(item)">
+                  </el-checkbox>
+                </div>
+                <div class="item-content">
+                  <div class="item-name">
+                    {{ item.name }}
+                    <el-tag v-if="item.required === 1" size="small" type="danger" effect="light" style="margin-left: 8px">必做</el-tag>
+                    <el-tag v-else size="small" type="info" effect="plain" style="margin-left: 8px">选做</el-tag>
+                  </div>
+                  <div class="item-desc" v-if="item.description">{{ item.description }}</div>
+                  <div class="item-meta" v-if="item.completed === 1">
+                    <el-icon :size="12" color="#67c23a"><Clock /></el-icon>
+                    <span>{{ item.completedTime }}</span>
+                    <span v-if="item.completedBy" style="margin-left: 12px">
+                      <el-icon :size="12" color="#67c23a"><User /></el-icon>
+                      {{ item.completedBy }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -297,9 +490,12 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
-import { List, Clock, Plus, Goods, ChatDotRound, Refresh, ArrowDown, Timer } from '@element-plus/icons-vue'
+import {
+  List, Clock, Plus, Goods, ChatDotRound, Refresh, ArrowDown, Timer,
+  Warning, VideoPlay, CircleCheck, User, Tools, Brush, Setting, View, Box
+} from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import { replacementApi, accessoryApi } from '@/api'
+import { replacementApi, accessoryApi, preparationChecklistApi, preparationTemplateApi } from '@/api'
 import BatchActionBar from '@/components/BatchActionBar.vue'
 
 const loading = ref(false)
@@ -313,6 +509,37 @@ const accessoryList = ref([])
 const historyList = ref([])
 const viewMode = ref('list')
 const timelineData = ref([])
+
+const activeTab = ref('basic')
+const generatingChecklist = ref(false)
+const templateAvailable = ref(false)
+const linkedChecklist = ref(null)
+const checklistDetailDialogVisible = ref(false)
+const checklistDetailLoading = ref(false)
+const checklistCategoryData = ref([])
+
+const categoryIcons = {
+  tool: Tools,
+  clean: Brush,
+  adjust: Setting,
+  check: View,
+  change: Box,
+  other: Goods
+}
+
+const categoryColors = {
+  tool: '#409eff',
+  clean: '#67c23a',
+  adjust: '#e6a23c',
+  check: '#909399',
+  change: '#f56c6c',
+  other: '#909399'
+}
+
+const currentAccessory = computed(() => {
+  if (!form.accessoryId) return null
+  return accessoryList.value.find(a => a.id === form.accessoryId)
+})
 
 const filters = reactive({
   keyword: '',
@@ -469,6 +696,9 @@ const resetForm = () => {
     remark: ''
   })
   formRef.value?.resetFields()
+  activeTab.value = 'basic'
+  linkedChecklist.value = null
+  templateAvailable.value = false
 }
 
 const handleAdd = () => {
@@ -518,7 +748,167 @@ const handleAccessoryChange = async (id) => {
       const res = await replacementApi.history(id)
       historyList.value = res.data || res || []
     } catch {}
+
+    try {
+      const templateRes = await preparationTemplateApi.getByTypeCode(acc.typeCode)
+      templateAvailable.value = !!(templateRes && templateRes.data)
+    } catch {
+      templateAvailable.value = false
+    }
+
+    linkedChecklist.value = null
+  } else {
+    templateAvailable.value = false
+    linkedChecklist.value = null
   }
+}
+
+const generateChecklistForReplacement = async () => {
+  if (!form.accessoryId) {
+    ElMessage.warning('请先选择配件')
+    return
+  }
+  generatingChecklist.value = true
+  try {
+    const res = await preparationChecklistApi.generate({
+      accessoryId: form.accessoryId,
+      operator: form.operator,
+      remark: '更换登记时生成'
+    })
+    if (res && res.data) {
+      linkedChecklist.value = res.data
+      ElMessage.success('准备清单生成成功')
+    }
+  } catch (e) {
+    ElMessage.error(e?.message || '生成失败')
+  } finally {
+    generatingChecklist.value = false
+  }
+}
+
+const startLinkedChecklist = async () => {
+  if (!linkedChecklist.value) return
+  try {
+    await ElMessageBox.confirm(`确定开始「${linkedChecklist.value.templateName}」吗？`, '确认开始', {
+      type: 'primary',
+      confirmButtonText: '开始',
+      cancelButtonText: '取消'
+    })
+    const res = await preparationChecklistApi.startChecklist(linkedChecklist.value.id, form.operator)
+    if (res && res.data) {
+      linkedChecklist.value = res.data
+      ElMessage.success('清单已开始')
+      if (checklistDetailDialogVisible.value) {
+        loadChecklistDetailData(linkedChecklist.value.id)
+      }
+    }
+  } catch (e) {
+    if (e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '操作失败')
+    }
+  }
+}
+
+const completeLinkedChecklist = async () => {
+  if (!linkedChecklist.value) return
+  try {
+    await ElMessageBox.confirm('确定完成此清单吗？完成后将无法修改。', '确认完成', {
+      type: 'success',
+      confirmButtonText: '完成',
+      cancelButtonText: '取消'
+    })
+    const res = await preparationChecklistApi.completeChecklist(linkedChecklist.value.id, form.operator)
+    if (res && res.data) {
+      linkedChecklist.value = res.data
+      ElMessage.success('清单已完成')
+      if (checklistDetailDialogVisible.value) {
+        loadChecklistDetailData(linkedChecklist.value.id)
+      }
+    }
+  } catch (e) {
+    if (e?.message !== 'cancel') {
+      ElMessage.error(e?.message || '操作失败')
+    }
+  }
+}
+
+const openChecklistDetail = () => {
+  if (!linkedChecklist.value) return
+  checklistDetailDialogVisible.value = true
+  loadChecklistDetailData(linkedChecklist.value.id)
+}
+
+const loadChecklistDetailData = async (id) => {
+  checklistDetailLoading.value = true
+  try {
+    const res = await preparationChecklistApi.getChecklistWithCategories(id)
+    if (res && res.data) {
+      checklistCategoryData.value = res.data
+    }
+    const res2 = await preparationChecklistApi.getById(id)
+    if (res2 && res2.data) {
+      linkedChecklist.value = res2.data
+    }
+  } catch (e) {
+    ElMessage.error(e?.message || '加载详情失败')
+  } finally {
+    checklistDetailLoading.value = false
+  }
+}
+
+const toggleChecklistItemComplete = (item) => {
+  if (!linkedChecklist.value || linkedChecklist.value.status === 'completed') {
+    return
+  }
+  if (linkedChecklist.value.status === 'pending') {
+    ElMessage.warning('请先开始清单')
+    return
+  }
+  item.completed = item.completed === 1 ? 0 : 1
+}
+
+const handleChecklistItemComplete = async (item) => {
+  if (!linkedChecklist.value || linkedChecklist.value.status !== 'in_progress') {
+    return
+  }
+  try {
+    const res = await preparationChecklistApi.completeItem({
+      itemId: item.id,
+      completed: item.completed,
+      completedBy: form.operator || '本人'
+    })
+    if (res && res.data) {
+      linkedChecklist.value = res.data
+      loadChecklistDetailData(linkedChecklist.value.id)
+    }
+  } catch (e) {
+    item.completed = item.completed === 1 ? 0 : 1
+    ElMessage.error(e?.message || '更新失败')
+  }
+}
+
+const handleChecklistDetailClose = () => {
+  checklistCategoryData.value = []
+}
+
+const getChecklistProgressPercent = (row) => {
+  if (!row || !row.totalCount) return 0
+  return Math.round((row.completedCount / row.totalCount) * 100)
+}
+
+const getChecklistProgressColor = (row) => {
+  const pct = getChecklistProgressPercent(row)
+  if (pct >= 100) return '#67c23a'
+  if (pct >= 80) return '#e6a23c'
+  return '#409eff'
+}
+
+const getCategoryIcon = (category) => {
+  return categoryIcons[category] || Goods
+}
+
+const getCategoryIconColor = (category) => {
+  return categoryColors[category] || '#909399'
 }
 
 const handleDelete = (row) => {
@@ -569,6 +959,24 @@ const refreshCurrentView = () => {
 
 const handleSubmit = async () => {
   await formRef.value.validate()
+
+  if (dialogMode.value === 'add' && linkedChecklist.value && linkedChecklist.value.status !== 'completed') {
+    if (linkedChecklist.value.requiredCompletedCount < linkedChecklist.value.requiredTotalCount) {
+      try {
+        await ElMessageBox.confirm(
+          '还有必做项未完成，确定要提交更换记录吗？建议完成所有必做项后再提交。',
+          '清单未完成',
+          { type: 'warning', confirmButtonText: '继续提交', cancelButtonText: '取消' }
+        )
+      } catch (e) {
+        if (e?.message === 'cancel') {
+          activeTab.value = 'checklist'
+          return
+        }
+      }
+    }
+  }
+
   submitting.value = true
   const originalForm = { ...form }
   try {
@@ -579,6 +987,15 @@ const handleSubmit = async () => {
       res = await replacementApi.update(form)
     }
     const result = res?.data
+
+    if (linkedChecklist.value && result?.recordId) {
+      try {
+        await preparationChecklistApi.linkReplacementRecord(linkedChecklist.value.id, result.recordId)
+      } catch (e) {
+        console.warn('关联准备清单失败', e)
+      }
+    }
+
     showSuccessNotification(result)
     dialogVisible.value = false
     refreshCurrentView()
@@ -975,6 +1392,198 @@ onMounted(() => {
       width: 100%;
       justify-content: space-around;
     }
+  }
+}
+
+.checklist-tab-content {
+  min-height: 400px;
+
+  .empty-state {
+    padding: 60px 0;
+  }
+}
+
+.checklist-preview {
+  .checklist-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 16px 20px;
+    background: #f5f7fa;
+    border-radius: 8px;
+    margin-bottom: 16px;
+
+    .checklist-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #303133;
+      margin-bottom: 8px;
+    }
+
+    .checklist-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+
+      .progress-info {
+        color: #606266;
+      }
+    }
+
+    .checklist-preview-actions {
+      display: flex;
+      gap: 8px;
+    }
+  }
+
+  .checklist-warning {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: #fdf6ec;
+    border: 1px solid #faecd8;
+    border-radius: 6px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: #e6a23c;
+  }
+}
+
+.checklist-detail {
+  .checklist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 16px 20px;
+    background: #f5f7fa;
+    border-radius: 8px;
+    margin-bottom: 16px;
+
+    .info-row {
+      margin-bottom: 8px;
+      &:last-child { margin-bottom: 0; }
+
+      .info-label {
+        color: #909399;
+        font-size: 13px;
+      }
+      .info-value {
+        color: #303133;
+        font-size: 14px;
+        font-weight: 500;
+      }
+    }
+  }
+
+  .progress-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 8px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #606266;
+  }
+
+  .category-list {
+    max-height: 450px;
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+
+  .category-section {
+    margin-bottom: 20px;
+
+    .category-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #ebeef5;
+
+      .category-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #303133;
+      }
+    }
+  }
+
+  .checklist-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px 16px;
+    background: #fafafa;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border: 1px solid #ebeef5;
+    transition: all 0.2s;
+
+    &:hover {
+      background: #f5f7fa;
+      border-color: #dcdfe6;
+    }
+
+    &.is-completed {
+      background: #f0f9eb;
+      border-color: #e1f3d8;
+
+      .item-name {
+        text-decoration: line-through;
+        color: #909399;
+      }
+    }
+
+    &.is-required {
+      border-left: 3px solid #f56c6c;
+    }
+
+    .item-checkbox {
+      margin-right: 12px;
+      padding-top: 2px;
+    }
+
+    .item-content {
+      flex: 1;
+
+      .item-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: #303133;
+        margin-bottom: 4px;
+      }
+
+      .item-desc {
+        font-size: 12px;
+        color: #909399;
+        margin-bottom: 4px;
+      }
+
+      .item-meta {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: #67c23a;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .checklist-preview-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .checklist-header {
+    flex-direction: column;
+    gap: 12px;
   }
 }
 </style>

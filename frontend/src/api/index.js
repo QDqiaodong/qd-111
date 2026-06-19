@@ -91,3 +91,32 @@ export const maintenancePlanApi = {
   planByInstrument: (instrument) => request.get(`/maintenance-plan/instrument/${instrument}`),
   planItems: (instrument) => request.get(`/maintenance-plan/items/${instrument}`)
 }
+
+export const preparationTemplateApi = {
+  page: (params) => request.get('/preparation-template/page', { params }),
+  list: (params) => request.get('/preparation-template/list', { params }),
+  getById: (id) => request.get(`/preparation-template/${id}`),
+  getByTypeCode: (typeCode) => request.get(`/preparation-template/by-type/${typeCode}`),
+  add: (data) => request.post('/preparation-template', data),
+  update: (data) => request.put('/preparation-template', data),
+  remove: (ids) => request.delete('/preparation-template', { data: { ids } }),
+  updateStatus: (id, enabled) => request.patch(`/preparation-template/${id}/status`, { enabled })
+}
+
+export const preparationChecklistApi = {
+  page: (params) => request.get('/preparation-checklist/page', { params }),
+  list: (params) => request.get('/preparation-checklist/list', { params }),
+  getById: (id) => request.get(`/preparation-checklist/${id}`),
+  getChecklistWithCategories: (id) => request.get(`/preparation-checklist/${id}/categories`),
+  generate: (data) => request.post('/preparation-checklist/generate', data),
+  startChecklist: (id, operator) => request.post(`/preparation-checklist/${id}/start`, { operator }),
+  completeItem: (data) => request.post('/preparation-checklist/complete-item', data),
+  completeChecklist: (id, operator) => request.post(`/preparation-checklist/${id}/complete`, { operator }),
+  remove: (ids) => request.delete('/preparation-checklist', { data: { ids } }),
+  linkReplacementRecord: (checklistId, replacementRecordId) =>
+    request.post(`/preparation-checklist/${checklistId}/link-replacement/${replacementRecordId}`),
+  getByReplacementRecordId: (replacementRecordId) =>
+    request.get(`/preparation-checklist/by-replacement/${replacementRecordId}`),
+  getByAccessoryId: (accessoryId) =>
+    request.get(`/preparation-checklist/by-accessory/${accessoryId}`)
+}

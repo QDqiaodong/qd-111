@@ -54,6 +54,10 @@
           <el-icon><List /></el-icon>
           <template #title>保养计划</template>
         </el-menu-item>
+        <el-menu-item index="/preparation-checklists">
+          <el-icon><DocumentChecked /></el-icon>
+          <template #title>准备清单</template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -86,7 +90,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Headset, DataAnalysis, Goods, RefreshRight, Warning, Grid, Folder, Calendar, Box, List } from '@element-plus/icons-vue'
+import { Headset, DataAnalysis, Goods, RefreshRight, Warning, Grid, Folder, Calendar, Box, List, DocumentChecked } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const collapse = ref(false)
