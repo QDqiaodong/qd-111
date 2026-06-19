@@ -57,4 +57,9 @@ public class DashboardController {
     public Result<List<RiskDistributionVO>> riskDistribution() {
         return Result.success(dashboardService.riskDistribution());
     }
+
+    @GetMapping("/annual-stats")
+    public Result<List<AnnualAccessoryStatsVO>> annualStats() {
+        return Result.success(dashboardService.annualStats());
+    }
 }

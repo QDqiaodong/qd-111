@@ -401,27 +401,18 @@ const handleDeleteGroup = (group) => {
     confirmButtonText: '删除',
     cancelButtonText: '取消'
   }).then(async () => {
-    const originalGroups = [...groupList.value]
-    const originalAccessories = allAccessories.value.map(a => ({ id: a.id, groupId: a.groupId }))
-    const prevCurrentGroupId = currentGroupId.value
     try {
       await groupApi.remove(group.id)
-      groupList.value = groupList.value.filter(g => g.id !== group.id)
+      ElMessage.success('删除成功')
+      await loadGroups()
       allAccessories.value.forEach(a => {
         if (a.groupId === group.id) a.groupId = null
       })
-      if (currentGroupId.value === group.id) {
+      if (!groupList.value.find(g => g.id === currentGroupId.value)) {
         currentGroupId.value = groupList.value[0]?.id || null
       }
-      ElMessage.success('删除成功')
       loadHealthScores()
     } catch (e) {
-      groupList.value = originalGroups
-      originalAccessories.forEach(oa => {
-        const acc = allAccessories.value.find(a => a.id === oa.id)
-        if (acc) acc.groupId = oa.groupId
-      })
-      currentGroupId.value = prevCurrentGroupId
       if (e?.message !== 'cancel') {
         ElMessage.error(e?.message || '删除失败，请稍后重试')
       }
@@ -432,26 +423,21 @@ const handleDeleteGroup = (group) => {
 const handleGroupSubmit = async () => {
   await groupFormRef.value.validate()
   submitting.value = true
-  const originalGroups = [...groupList.value]
   try {
     if (groupDialogMode.value === 'add') {
-      const res = await groupApi.add(groupForm)
-      const newId = res?.data?.id || Date.now()
-      groupList.value.push({ ...groupForm, id: newId })
+      await groupApi.add(groupForm)
       ElMessage.success('新增成功')
     } else {
       await groupApi.update(groupForm)
-      const idx = groupList.value.findIndex(g => g.id === groupForm.id)
-      if (idx > -1) groupList.value.splice(idx, 1, { ...groupForm })
       ElMessage.success('更新成功')
     }
     groupDialogVisible.value = false
+    await loadGroups()
     loadHealthScores()
   } catch (err) {
     if (err?.message === '校验不通过') {
       return
     }
-    groupList.value = originalGroups
     ElMessage.error(err?.message || '保存失败，请稍后重试')
   } finally {
     submitting.value = false

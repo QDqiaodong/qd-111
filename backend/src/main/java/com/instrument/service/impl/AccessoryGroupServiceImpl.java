@@ -40,9 +40,11 @@ public class AccessoryGroupServiceImpl implements AccessoryGroupService {
 
     @Override
     public List<AccessoryGroup> list() {
-        LambdaQueryWrapper<AccessoryGroup> wrapper = new LambdaQueryWrapper<>();
-        wrapper.orderByAsc(AccessoryGroup::getSortOrder).orderByAsc(AccessoryGroup::getId);
-        return groupMapper.selectList(wrapper);
+        List<AccessoryGroup> groups = groupMapper.selectList(null);
+        groups.sort(Comparator
+                .comparing(AccessoryGroup::getSortOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(AccessoryGroup::getId));
+        return groups;
     }
 
     @Override
@@ -57,13 +59,21 @@ public class AccessoryGroupServiceImpl implements AccessoryGroupService {
             group.setSortOrder(0);
         }
         int rows = groupMapper.insert(group);
-        return rows > 0 ? group : null;
+        if (rows > 0) {
+            normalizeSortOrders();
+            return groupMapper.selectById(group.getId());
+        }
+        return null;
     }
 
     @Override
     @Transactional
     public boolean update(AccessoryGroup group) {
-        return groupMapper.updateById(group) > 0;
+        boolean ok = groupMapper.updateById(group) > 0;
+        if (ok) {
+            normalizeSortOrders();
+        }
+        return ok;
     }
 
     @Override
@@ -75,7 +85,31 @@ public class AccessoryGroupServiceImpl implements AccessoryGroupService {
         if (accessoryCount > 0) {
             throw new IllegalArgumentException("该分组下仍有 " + accessoryCount + " 个配件，请先移除或变更配件的分组后再删除");
         }
-        return groupMapper.deleteById(id) > 0;
+        boolean ok = groupMapper.deleteById(id) > 0;
+        if (ok) {
+            normalizeSortOrders();
+        }
+        return ok;
+    }
+
+    private void normalizeSortOrders() {
+        List<AccessoryGroup> groups = groupMapper.selectList(null);
+        groups.sort(Comparator
+                .comparing(AccessoryGroup::getSortOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(AccessoryGroup::getId));
+        int order = 1;
+        List<AccessoryGroup> changed = new ArrayList<>();
+        for (AccessoryGroup group : groups) {
+            Integer current = group.getSortOrder();
+            if (current == null || !current.equals(order)) {
+                group.setSortOrder(order);
+                changed.add(group);
+            }
+            order++;
+        }
+        for (AccessoryGroup group : changed) {
+            groupMapper.updateById(group);
+        }
     }
 
     @Override

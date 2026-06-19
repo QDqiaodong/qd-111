@@ -83,7 +83,8 @@ export const dashboardApi = {
   riskTierList: (tier) => request.get(`/dashboard/risk-tier/${tier}`),
   riskTiers: () => request.get('/dashboard/risk-tiers'),
   wornHeatmap: () => request.get('/dashboard/worn-heatmap'),
-  riskDistribution: () => request.get('/dashboard/risk-distribution')
+  riskDistribution: () => request.get('/dashboard/risk-distribution'),
+  annualStats: () => request.get('/dashboard/annual-stats')
 }
 
 export const maintenancePlanApi = {

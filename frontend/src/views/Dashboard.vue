@@ -265,6 +265,62 @@
         <el-card class="card-shadow" shadow="never">
           <template #header>
             <div class="card-header-title">
+              <el-icon color="#409eff"><Calendar /></el-icon>
+              <span>年度配件更换统计</span>
+              <span class="section-subtitle">按年度汇总各类配件更换次数、平均使用天数及高损耗乐器</span>
+            </div>
+          </template>
+          <div v-loading="annualLoading" class="annual-body">
+            <div v-if="annualStats.length > 0" class="annual-cards">
+              <div v-for="year in annualStats" :key="year.year" class="annual-card">
+                <div class="annual-card-head">
+                  <span class="annual-year">{{ year.year }} 年</span>
+                  <el-tag type="primary" effect="dark" size="small">{{ year.totalReplacements }} 次更换</el-tag>
+                </div>
+                <div class="annual-avg">
+                  <span class="annual-avg-value">{{ year.avgUsageDays }}</span>
+                  <span class="annual-avg-unit">天</span>
+                  <span class="annual-avg-label">平均使用周期</span>
+                </div>
+                <div class="annual-sub-title">各类配件更换</div>
+                <div class="annual-type-list">
+                  <div v-for="t in year.typeStats" :key="t.typeCode" class="annual-type-item">
+                    <span class="annual-type-name">{{ t.typeName }}</span>
+                    <div class="annual-type-bar-wrap">
+                      <div class="annual-type-bar" :style="{ width: typePercent(year, t) + '%' }"></div>
+                    </div>
+                    <span class="annual-type-count">{{ t.replacementCount }}次</span>
+                    <span class="annual-type-avg">均{{ t.avgUsageDays }}天</span>
+                  </div>
+                  <el-empty v-if="!year.typeStats.length" description="暂无类型数据" :image-size="40" />
+                </div>
+                <div class="annual-sub-title">高损耗乐器</div>
+                <div class="annual-instrument-list">
+                  <el-tag
+                    v-for="inst in year.topInstruments"
+                    :key="inst.instrument"
+                    type="warning"
+                    effect="plain"
+                    size="small"
+                    class="annual-instrument-tag"
+                  >
+                    {{ inst.instrumentName }} · {{ inst.replacementCount }}次
+                  </el-tag>
+                  <span v-if="!year.topInstruments.length" class="annual-empty-text">暂无数据</span>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无年度更换数据" :image-size="80" />
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row style="margin-top: 16px">
+      <el-col :span="24">
+        <el-card class="card-shadow" shadow="never">
+          <template #header>
+            <div class="card-header-title">
               <el-icon color="#f56c6c"><DataAnalysis /></el-icon>
               <span>损耗热区分布</span>
               <span class="section-subtitle">按乐器×配件类型交叉呈现损耗状态</span>
@@ -294,6 +350,8 @@ const wornDist = ref([])
 const groupDist = ref([])
 const wornHeatmapData = ref({})
 const heatmapLoading = ref(false)
+const annualStats = ref([])
+const annualLoading = ref(false)
 
 const expiredList = ref([])
 const brokenList = ref([])
@@ -319,21 +377,29 @@ const brokenGrouped = computed(() => groupByInstrument(brokenList.value))
 const severeGrouped = computed(() => groupByInstrument(severeList.value))
 const upcomingGrouped = computed(() => groupByInstrument(upcomingRiskList.value))
 
+const typePercent = (year, type) => {
+  const max = Math.max(...(year.typeStats || []).map(t => t.replacementCount || 0), 1)
+  return Math.round(((type.replacementCount || 0) * 100) / max)
+}
+
 const loadData = async () => {
   try {
     heatmapLoading.value = true
-    const [s, u, w, g, r, h] = await Promise.all([
+    annualLoading.value = true
+    const [s, u, w, g, r, h, a] = await Promise.all([
       dashboardApi.stats(),
       dashboardApi.upcomingReplacements(),
       dashboardApi.wornDistribution(),
       dashboardApi.groupDistribution(),
       dashboardApi.riskTiers().catch(() => null),
-      dashboardApi.wornHeatmap().catch(() => null)
+      dashboardApi.wornHeatmap().catch(() => null),
+      dashboardApi.annualStats().catch(() => null)
     ])
     Object.assign(stats, s.data || s || {})
     upcomingList.value = u.data || u || []
     wornDist.value = w.data || w || []
     groupDist.value = g.data || g || []
+    annualStats.value = a?.data || a || []
 
     if (h && h.data) {
       wornHeatmapData.value = h.data
@@ -356,12 +422,14 @@ const loadData = async () => {
     wornDist.value = []
     groupDist.value = []
     wornHeatmapData.value = {}
+    annualStats.value = []
     expiredList.value = []
     brokenList.value = []
     severeList.value = []
     upcomingRiskList.value = []
   } finally {
     heatmapLoading.value = false
+    annualLoading.value = false
   }
 }
 
@@ -466,6 +534,37 @@ const loadMockData = () => {
       { instrumentCode: 'erhu', instrumentName: '二胡', typeCode: 'rosin', typeName: '松香', total: 2, goodCount: 1, slightCount: 1, severeCount: 0, brokenCount: 0 }
     ]
   }
+
+  annualStats.value = [
+    {
+      year: 2026,
+      totalReplacements: 5,
+      avgUsageDays: 61,
+      typeStats: [
+        { typeCode: 'string', typeName: '琴弦', replacementCount: 2, avgUsageDays: 73 },
+        { typeCode: 'rosin', typeName: '松香', replacementCount: 1, avgUsageDays: 35 },
+        { typeCode: 'pick', typeName: '拨片', replacementCount: 1, avgUsageDays: 20 },
+        { typeCode: 'cleaner', typeName: '清洁用品', replacementCount: 1, avgUsageDays: 105 }
+      ],
+      topInstruments: [
+        { instrument: 'guitar-acoustic', instrumentName: '木吉他', replacementCount: 3 },
+        { instrument: 'violin', instrumentName: '小提琴', replacementCount: 1 },
+        { instrument: 'guitar-electric', instrumentName: '电吉他', replacementCount: 1 }
+      ]
+    },
+    {
+      year: 2025,
+      totalReplacements: 2,
+      avgUsageDays: 90,
+      typeStats: [
+        { typeCode: 'string', typeName: '琴弦', replacementCount: 1, avgUsageDays: 90 },
+        { typeCode: 'cleaner', typeName: '清洁用品', replacementCount: 1, avgUsageDays: 90 }
+      ],
+      topInstruments: [
+        { instrument: 'guitar-acoustic', instrumentName: '木吉他', replacementCount: 2 }
+      ]
+    }
+  ]
 }
 
 onMounted(loadData)
@@ -764,6 +863,144 @@ onMounted(loadData)
     font-weight: 400;
     color: #909399;
     margin-left: 8px;
+  }
+}
+
+.annual-body {
+  min-height: 120px;
+}
+
+.annual-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.annual-card {
+  background: #fafbfc;
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  padding: 16px 18px;
+  transition: all 0.25s;
+
+  &:hover {
+    border-color: #c6e2ff;
+    box-shadow: 0 4px 14px rgba(64, 158, 255, 0.1);
+  }
+}
+
+.annual-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+
+  .annual-year {
+    font-size: 18px;
+    font-weight: 700;
+    color: #303133;
+  }
+}
+
+.annual-avg {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed #ebeef5;
+
+  .annual-avg-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #409eff;
+    line-height: 1;
+  }
+
+  .annual-avg-unit {
+    font-size: 13px;
+    color: #909399;
+  }
+
+  .annual-avg-label {
+    font-size: 12px;
+    color: #909399;
+    margin-left: 8px;
+  }
+}
+
+.annual-sub-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.annual-type-list {
+  margin-bottom: 14px;
+}
+
+.annual-type-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+
+  .annual-type-name {
+    width: 70px;
+    font-size: 13px;
+    color: #606266;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .annual-type-bar-wrap {
+    flex: 1;
+    height: 7px;
+    background: #f0f2f5;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .annual-type-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #409eff, #79bbff);
+    border-radius: 4px;
+    transition: width 0.5s;
+  }
+
+  .annual-type-count {
+    width: 42px;
+    text-align: right;
+    font-size: 12px;
+    color: #303133;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .annual-type-avg {
+    width: 64px;
+    text-align: right;
+    font-size: 12px;
+    color: #909399;
+    flex-shrink: 0;
+  }
+}
+
+.annual-instrument-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  .annual-instrument-tag {
+    border-radius: 12px;
+  }
+
+  .annual-empty-text {
+    font-size: 12px;
+    color: #c0c4cc;
   }
 }
 </style>

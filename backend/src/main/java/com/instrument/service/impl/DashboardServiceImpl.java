@@ -133,6 +133,9 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     public List<GroupDistributionVO> groupDistribution() {
         List<AccessoryGroup> groups = groupMapper.selectList(null);
+        groups.sort(Comparator
+                .comparing(AccessoryGroup::getSortOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(AccessoryGroup::getId));
         List<Accessory> all = accessoryMapper.selectList(null);
         long total = all.size();
         Map<Long, Long> countMap = all.stream()
@@ -347,5 +350,101 @@ public class DashboardServiceImpl implements DashboardService {
                 .comparing(RiskTierItemVO::getRiskScore, Comparator.reverseOrder())
                 .thenComparing((RiskTierItemVO item) -> item.getDaysLeft() == null ? Integer.MAX_VALUE : item.getDaysLeft())
                 .thenComparing(RiskTierItemVO::getUsageDays, Comparator.nullsLast(Comparator.reverseOrder()));
+    }
+
+    @Override
+    public List<AnnualAccessoryStatsVO> annualStats() {
+        List<ReplacementRecord> records = recordMapper.selectList(null);
+        if (records.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Accessory> accessories = accessoryMapper.selectList(null);
+        Map<Long, Accessory> accessoryMap = accessories.stream()
+                .collect(Collectors.toMap(Accessory::getId, a -> a, (a, b) -> a));
+
+        Map<Integer, List<ReplacementRecord>> byYear = records.stream()
+                .filter(r -> r.getReplaceDate() != null)
+                .collect(Collectors.groupingBy(r -> r.getReplaceDate().getYear()));
+
+        List<AnnualAccessoryStatsVO> result = new ArrayList<>();
+        for (Map.Entry<Integer, List<ReplacementRecord>> yearEntry : byYear.entrySet()) {
+            int year = yearEntry.getKey();
+            List<ReplacementRecord> yearRecords = yearEntry.getValue();
+
+            AnnualAccessoryStatsVO vo = new AnnualAccessoryStatsVO();
+            vo.setYear(year);
+            vo.setTotalReplacements(yearRecords.size());
+            vo.setAvgUsageDays(avgUsageDays(yearRecords));
+
+            Map<String, List<ReplacementRecord>> byType = yearRecords.stream()
+                    .collect(Collectors.groupingBy(r -> {
+                        Accessory acc = accessoryMap.get(r.getAccessoryId());
+                        return acc != null && acc.getTypeCode() != null ? acc.getTypeCode() : "unknown";
+                    }));
+
+            List<AnnualAccessoryStatsVO.TypeAnnualStat> typeStats = new ArrayList<>();
+            for (Map.Entry<String, List<ReplacementRecord>> typeEntry : byType.entrySet()) {
+                List<ReplacementRecord> typeRecords = typeEntry.getValue();
+                AnnualAccessoryStatsVO.TypeAnnualStat stat = new AnnualAccessoryStatsVO.TypeAnnualStat();
+                stat.setTypeCode(typeEntry.getKey());
+                stat.setTypeName(typeRecords.stream()
+                        .map(r -> accessoryMap.get(r.getAccessoryId()))
+                        .filter(Objects::nonNull)
+                        .map(Accessory::getTypeName)
+                        .filter(Objects::nonNull)
+                        .findFirst()
+                        .orElse(typeEntry.getKey()));
+                stat.setReplacementCount(typeRecords.size());
+                stat.setAvgUsageDays(avgUsageDays(typeRecords));
+                typeStats.add(stat);
+            }
+            typeStats.sort(Comparator.comparing(AnnualAccessoryStatsVO.TypeAnnualStat::getReplacementCount,
+                    Comparator.reverseOrder()));
+            vo.setTypeStats(typeStats);
+
+            Map<String, List<ReplacementRecord>> byInstrument = yearRecords.stream()
+                    .collect(Collectors.groupingBy(r -> {
+                        Accessory acc = accessoryMap.get(r.getAccessoryId());
+                        return acc != null && acc.getInstrument() != null ? acc.getInstrument() : "unknown";
+                    }));
+
+            List<AnnualAccessoryStatsVO.InstrumentConsumptionStat> topInstruments = new ArrayList<>();
+            for (Map.Entry<String, List<ReplacementRecord>> instEntry : byInstrument.entrySet()) {
+                List<ReplacementRecord> instRecords = instEntry.getValue();
+                AnnualAccessoryStatsVO.InstrumentConsumptionStat stat = new AnnualAccessoryStatsVO.InstrumentConsumptionStat();
+                stat.setInstrument(instEntry.getKey());
+                stat.setInstrumentName(instRecords.stream()
+                        .map(r -> {
+                            Accessory acc = accessoryMap.get(r.getAccessoryId());
+                            if (acc != null && acc.getInstrumentName() != null) {
+                                return acc.getInstrumentName();
+                            }
+                            return r.getInstrumentName();
+                        })
+                        .filter(Objects::nonNull)
+                        .findFirst()
+                        .orElse(instEntry.getKey()));
+                stat.setReplacementCount(instRecords.size());
+                topInstruments.add(stat);
+            }
+            topInstruments.sort(Comparator.comparing(AnnualAccessoryStatsVO.InstrumentConsumptionStat::getReplacementCount,
+                    Comparator.reverseOrder()));
+            vo.setTopInstruments(topInstruments.stream().limit(5).collect(Collectors.toList()));
+
+            result.add(vo);
+        }
+        result.sort(Comparator.comparing(AnnualAccessoryStatsVO::getYear, Comparator.reverseOrder()));
+        return result;
+    }
+
+    private int avgUsageDays(List<ReplacementRecord> records) {
+        double avg = records.stream()
+                .map(ReplacementRecord::getUsageDays)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .average()
+                .orElse(0);
+        return (int) Math.round(avg);
     }
 }

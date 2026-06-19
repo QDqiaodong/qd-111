@@ -21,4 +21,6 @@ public interface DashboardService {
     WornHeatmapVO wornHeatmap();
 
     List<RiskDistributionVO> riskDistribution();
+
+    List<AnnualAccessoryStatsVO> annualStats();
 }
