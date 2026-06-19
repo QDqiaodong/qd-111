@@ -30,6 +30,10 @@
           <el-icon><Warning /></el-icon>
           <template #title>损耗状态</template>
         </el-menu-item>
+        <el-menu-item index="/worn-status-dict">
+          <el-icon><Collection /></el-icon>
+          <template #title>状态字典</template>
+        </el-menu-item>
         <el-menu-item index="/spec-comparison">
           <el-icon><Grid /></el-icon>
           <template #title>规格对照</template>
@@ -90,7 +94,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Headset, DataAnalysis, Goods, RefreshRight, Warning, Grid, Folder, Calendar, Box, List, DocumentChecked } from '@element-plus/icons-vue'
+import { Headset, DataAnalysis, Goods, RefreshRight, Warning, Grid, Folder, Calendar, Box, List, DocumentChecked, Collection } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const collapse = ref(false)

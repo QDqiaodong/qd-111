@@ -47,6 +47,13 @@ public class GlobalExceptionHandler {
         return Result.error(400, e.getMessage());
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Result<Void> handleIllegalStateException(IllegalStateException e) {
+        log.warn("操作冲突: {}", e.getMessage());
+        return Result.error(409, e.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<Void> handleException(Exception e) {

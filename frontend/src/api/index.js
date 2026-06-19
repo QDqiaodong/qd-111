@@ -75,6 +75,19 @@ export const dictApi = {
   replacementCycles: () => request.get('/dict/replacement-cycles')
 }
 
+export const wornStatusDictApi = {
+  page: (params) => request.get('/worn-status-dict/page', { params }),
+  list: () => request.get('/worn-status-dict/list'),
+  listEnabled: () => request.get('/worn-status-dict/list-enabled'),
+  getById: (id) => request.get(`/worn-status-dict/${id}`),
+  getByCode: (code) => request.get(`/worn-status-dict/code/${code}`),
+  add: (data) => request.post('/worn-status-dict', data),
+  update: (data) => request.put('/worn-status-dict', data),
+  remove: (ids) => request.delete('/worn-status-dict', { data: { ids } }),
+  getUsage: (id) => request.get(`/worn-status-dict/usage/${id}`),
+  toggleStatus: (id, enabled) => request.patch(`/worn-status-dict/${id}/status`, { enabled })
+}
+
 export const dashboardApi = {
   stats: () => request.get('/dashboard/stats'),
   upcomingReplacements: () => request.get('/dashboard/upcoming-replacements'),

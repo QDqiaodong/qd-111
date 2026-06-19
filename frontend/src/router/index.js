@@ -31,6 +31,12 @@ const routes = [
         meta: { title: '损耗状态标注' }
       },
       {
+        path: 'worn-status-dict',
+        name: 'WornStatusDict',
+        component: () => import('@/views/WornStatusDict.vue'),
+        meta: { title: '损耗状态字典' }
+      },
+      {
         path: 'groups',
         name: 'Groups',
         component: () => import('@/views/Groups.vue'),

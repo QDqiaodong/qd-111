@@ -283,7 +283,7 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Rank, ArrowDown, Tickets, FolderOpened, Check, Close, WarningFilled, Right } from '@element-plus/icons-vue'
-import { accessoryApi, dictApi, groupApi, dashboardApi } from '@/api'
+import { accessoryApi, dictApi, groupApi, dashboardApi, wornStatusDictApi } from '@/api'
 import WornHeatmap from '@/components/WornHeatmap.vue'
 
 const loading = ref(false)
@@ -397,11 +397,18 @@ const loadDict = async () => {
   try {
     const [t, w, g] = await Promise.all([
       dictApi.accessoryTypes(),
-      dictApi.wornStatuses(),
+      wornStatusDictApi.listEnabled(),
       groupApi.list()
     ])
     accessoryTypes.value = t.data || t || []
-    if (w.data || w) wornStatuses.value = w.data || w
+    if (w.data || w) {
+      const list = w.data || w
+      wornStatuses.value = list.map(item => ({
+        code: item.statusCode,
+        label: item.statusLabel,
+        color: item.color || '#909399'
+      }))
+    }
     groupList.value = g.data || g || []
   } catch {}
   if (accessoryTypes.value.length === 0) {

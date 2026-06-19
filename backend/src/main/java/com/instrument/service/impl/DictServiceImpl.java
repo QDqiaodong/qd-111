@@ -1,6 +1,8 @@
 package com.instrument.service.impl;
 
+import com.instrument.entity.WornStatusDict;
 import com.instrument.service.DictService;
+import com.instrument.service.WornStatusDictService;
 import com.instrument.vo.DictItemVO;
 import com.instrument.vo.DictSnapshotVO;
 import com.instrument.vo.DictVO;
@@ -22,6 +24,7 @@ import java.util.stream.Collectors;
 public class DictServiceImpl implements DictService {
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private final WornStatusDictService wornStatusDictService;
 
     private static final String CACHE_KEY = "instrument:dict";
 
@@ -160,6 +163,16 @@ public class DictServiceImpl implements DictService {
     @SuppressWarnings("unchecked")
     public List<DictVO> wornStatuses() {
         try {
+            List<WornStatusDict> dictList = wornStatusDictService.listEnabled();
+            if (dictList != null && !dictList.isEmpty()) {
+                return dictList.stream()
+                        .map(d -> new DictVO(d.getStatusCode(), d.getStatusLabel()))
+                        .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            log.warn("从数据库读取损耗状态字典失败，使用缓存/默认数据: {}", e.getMessage());
+        }
+        try {
             Object cached = redisTemplate.opsForHash().get(CACHE_KEY, "wornStatuses");
             if (cached instanceof List) {
                 return (List<DictVO>) cached;
@@ -198,6 +211,12 @@ public class DictServiceImpl implements DictService {
 
     @Override
     public String getWornStatusLabel(String code) {
+        try {
+            WornStatusDict dict = wornStatusDictService.getByCode(code);
+            if (dict != null) {
+                return dict.getStatusLabel();
+            }
+        } catch (Exception ignored) {}
         return wornStatuses().stream()
                 .filter(d -> d.getCode().equals(code))
                 .map(DictVO::getLabel)
@@ -229,9 +248,9 @@ public class DictServiceImpl implements DictService {
         vo.setInstruments(instItems);
         vo.setInstrumentsUpdateTime(DICT_VERSION_TIME);
 
-        List<DictItemVO> wornItems = getDictItemsFromCache("wornStatusItems", WORN_STATUS_ITEMS);
+        List<DictItemVO> wornItems = getWornStatusDictItems();
         vo.setWornStatuses(wornItems);
-        vo.setWornStatusesUpdateTime(DICT_VERSION_TIME);
+        vo.setWornStatusesUpdateTime(LocalDateTime.now());
 
         List<DictItemVO> cycleItems = getDictItemsFromCache("replacementCycleItems", REPLACEMENT_CYCLE_ITEMS);
         vo.setReplacementCycles(cycleItems);
@@ -251,5 +270,19 @@ public class DictServiceImpl implements DictService {
             }
         } catch (Exception ignored) {}
         return fallback;
+    }
+
+    private List<DictItemVO> getWornStatusDictItems() {
+        try {
+            List<WornStatusDict> dictList = wornStatusDictService.listAll();
+            if (dictList != null && !dictList.isEmpty()) {
+                return dictList.stream()
+                        .map(d -> new DictItemVO(d.getStatusCode(), d.getStatusLabel(), d.getSortOrder()))
+                        .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            log.warn("从数据库读取损耗状态字典条目失败，使用默认数据: {}", e.getMessage());
+        }
+        return WORN_STATUS_ITEMS;
     }
 }

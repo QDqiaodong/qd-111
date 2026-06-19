@@ -314,6 +314,29 @@ INSERT INTO preparation_template (type_code, type_name, name, description, enabl
 ('capo', '变调夹', '变调夹更换准备清单', '更换变调夹前的准备工作', 1, 4),
 ('strap', '背带', '背带更换准备清单', '更换背带前的准备工作', 1, 4);
 
+DROP TABLE IF EXISTS worn_status_dict;
+CREATE TABLE worn_status_dict (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    status_code VARCHAR(20) NOT NULL COMMENT '状态编码',
+    status_label VARCHAR(50) NOT NULL COMMENT '状态名称',
+    color VARCHAR(20) DEFAULT '#909399' COMMENT '状态颜色',
+    sort_order INT DEFAULT 0 COMMENT '排序',
+    enabled TINYINT DEFAULT 1 COMMENT '是否启用 0-禁用 1-启用',
+    remark VARCHAR(255) DEFAULT NULL COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除 0-未删除 1-已删除',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_status_code (status_code),
+    KEY idx_sort_order (sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='损耗状态字典';
+
+INSERT INTO worn_status_dict (status_code, status_label, color, sort_order, remark) VALUES
+('good', '完好', '#67c23a', 1, '配件状态良好，可正常使用'),
+('slight', '轻微磨损', '#e6a23c', 2, '有轻微磨损痕迹，不影响使用'),
+('severe', '严重损耗', '#f56c6c', 3, '损耗较严重，建议更换'),
+('broken', '已损坏', '#909399', 4, '已损坏，无法使用');
+
 INSERT INTO preparation_template_item (template_id, category, category_name, name, description, required, sort_order) VALUES
 (1, 'tool', '工具准备', '准备新琴弦', '确认新琴弦规格、品牌型号正确，检查包装完好', 1, 1),
 (1, 'tool', '工具准备', '准备换弦工具', '准备卷弦器、剪弦钳、调音器等必要工具', 1, 2),
