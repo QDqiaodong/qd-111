@@ -21,6 +21,7 @@ import com.instrument.service.PreparationChecklistService;
 import com.instrument.service.PreparationTemplateService;
 import com.instrument.vo.PreparationChecklistCategoryVO;
 import com.instrument.vo.PreparationChecklistVO;
+import com.instrument.vo.PreparationTemplateVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
