@@ -59,6 +59,12 @@ const routes = [
         name: 'ReplacementCalendar',
         component: () => import('@/views/ReplacementCalendar.vue'),
         meta: { title: '更换节奏日历' }
+      },
+      {
+        path: 'maintenance-plan',
+        name: 'MaintenancePlan',
+        component: () => import('@/views/MaintenancePlan.vue'),
+        meta: { title: '乐器保养计划' }
       }
     ]
   }

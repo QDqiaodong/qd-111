@@ -85,3 +85,9 @@ export const dashboardApi = {
   wornHeatmap: () => request.get('/dashboard/worn-heatmap'),
   riskDistribution: () => request.get('/dashboard/risk-distribution')
 }
+
+export const maintenancePlanApi = {
+  allPlans: () => request.get('/maintenance-plan/all'),
+  planByInstrument: (instrument) => request.get(`/maintenance-plan/instrument/${instrument}`),
+  planItems: (instrument) => request.get(`/maintenance-plan/items/${instrument}`)
+}

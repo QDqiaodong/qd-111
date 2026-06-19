@@ -50,6 +50,10 @@
           <el-icon><Calendar /></el-icon>
           <template #title>更换日历</template>
         </el-menu-item>
+        <el-menu-item index="/maintenance-plan">
+          <el-icon><List /></el-icon>
+          <template #title>保养计划</template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -82,7 +86,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Headset, DataAnalysis, Goods, RefreshRight, Warning, Grid, Folder, Calendar, Box } from '@element-plus/icons-vue'
+import { Headset, DataAnalysis, Goods, RefreshRight, Warning, Grid, Folder, Calendar, Box, List } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const collapse = ref(false)
